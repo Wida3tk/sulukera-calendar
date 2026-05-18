@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>التقويم الأكاديمي 2026 — سلوكيرا</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCJG0sOcs0Wr6QslTUKmDshs9LapFyjs1w",
+      authDomain: "sulukera-calendar.firebaseapp.com",
+      projectId: "sulukera-calendar",
+      storageBucket: "sulukera-calendar.firebasestorage.app",
+      messagingSenderId: "729863935633",
+      appId: "1:729863935633:web:c3069e853fa11e4d4b9130"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ═══════════════════════════════════════════════
+    // بيانات التقويم الكاملة لكل البرامج
+    // ═══════════════════════════════════════════════
+    const PROGRAMS_DATA = {
+      "ABA": {
+        nameAr: "برنامج ABA",
+        legend: [
+          { label: "بداية فصل دراسي", color: "#0D40FC" },
+          { label: "أسابيع دراسية", color: "#55D7FF" },
+          { label: "أسبوع الاختبارات", color: "#FF6B35" },
+          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
+          { label: "إجازة رسمية", color: "#FFD93D" }
+        ],
+        events: {
+          // يناير
+          "2026-01-04": "study", "2026-01-05": "study", "2026-01-06": "study",
+          "2026-01-07": "study", "2026-01-08": "study", "2026-01-09": "study",
+          "2026-01-10": "study", "2026-01-11": "study", "2026-01-12": "study",
+          "2026-01-13": "study", "2026-01-14": "study", "2026-01-15": "study",
+          "2026-01-18": "start",
+          // فبراير
+          "2026-02-01": "start",
+          // مارس
+          "2026-03-01": "start",
+          // نوفمبر
+          "2026-11-01": "start",
+        }
+      },
+      "ABA_MAY": {
+        nameAr: "ABA — دفعة مايو",
+        legend: [
+          { label: "بداية فصل دراسي", color: "#0D40FC" },
+          { label: "أسابيع دراسية", color: "#55D7FF" },
+          { label: "أسبوع الاختبارات", color: "#FF6B35" },
+          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
+          { label: "إجازة رسمية", color: "#FFD93D" }
+        ],
+        events: {}
+      },
+      "BATCH_11": {
+        nameAr: "دفعة 11",
+        legend: [
+          { label: "بداية فصل دراسي", color: "#0D40FC" },
+          { label: "أسابيع دراسية", color: "#55D7FF" },
+          { label: "أسبوع الاختبارات", color: "#FF6B35" },
+          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
+          { label: "إجازة رسمية", color: "#FFD93D" }
+        ],
+        events: {}
+      },
+      "BATCH_10": {
+        nameAr: "دفعة 10",
+        legend: [
+          { label: "بداية فصل دراسي", color: "#0D40FC" },
+          { label: "أسابيع دراسية", color: "#55D7FF" },
+          { label: "أسبوع الاختبارات", color: "#FF6B35" },
+          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
+          { label: "إجازة رسمية", color: "#FFD93D" }
+        ],
+        events: {}
+      },
+      "OBM": {
+        nameAr: "OBM-P Live",
+        legend: [
+          { label: "OBM-P Live", color: "#0D40FC" },
+          { label: "إجازة الحج", color: "#FFD93D" }
+        ],
+        events: {}
+      },
+      "BE": {
+        nameAr: "برنامج BE",
+        legend: [
+          { label: "لقاءات جماعية", color: "#0D40FC" },
+          { label: "تواريخ الإقامة", color: "#FF6B35" }
+        ],
+        events: {}
+      },
+      "ABAT": {
+        nameAr: "ABAT Live",
+        legend: [
+          { label: "ABAT", color: "#0D40FC" },
+          { label: "إجازة الحج", color: "#FFD93D" }
+        ],
+        events: {}
+      },
+      "OBM_EC": {
+        nameAr: "OBM E&C",
+        legend: [
+          { label: "محاضرة", color: "#0D40FC" },
+          { label: "المشاريع", color: "#55D7FF" },
+          { label: "اختبار الوحدة", color: "#FF6B35" },
+          { label: "اختبار نهاية المستوى", color: "#A8E6CF" },
+          { label: "إجازة الحج", color: "#FFD93D" }
+        ],
+        events: {}
+      }
+    };
+
+    const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const DAYS_AR = ["ح","ن","ث","ر","خ","ج","س"];
+
+    function buildCalendar(programId, events) {
+      const months = [];
+      for (let m = 0; m < 12; m++) {
+        const firstDay = new Date(2026, m, 1).getDay();
+        const daysInMonth = new Date(2026, m + 1, 0).getDate();
+        months.push({ month: m, firstDay, daysInMonth });
+      }
+
+      let html = `<div class="year-grid">`;
+      for (const { month, firstDay, daysInMonth } of months) {
+        html += `<div class="month-card">
+          <div class="month-name">${MONTHS_AR[month]}</div>
+          <div class="days-header">`;
+        for (const d of DAYS_AR) html += `<span>${d}</span>`;
+        html += `</div><div class="days-grid">`;
+        for (let i = 0; i < firstDay; i++) html += `<span></span>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `2026-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const type = events[dateStr] || "";
+          const today = new Date();
+          const isToday = today.getFullYear() === 2026 && today.getMonth() === month && today.getDate() === d;
+          html += `<span class="day ${type} ${isToday ? 'today' : ''}" title="${dateStr}">${d}</span>`;
+        }
+        html += `</div></div>`;
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      const container = document.getElementById("programs-container");
+      const loading = document.getElementById("loading");
+
+      // استمع للتغييرات في الوقت الفعلي
+      const colRef = collection(db, "calendars");
+      onSnapshot(colRef, (snapshot) => {
+        const visiblePrograms = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.visible) visiblePrograms[docSnap.id] = data;
+        });
+
+        loading.style.display = "none";
+
+        if (Object.keys(visiblePrograms).length === 0) {
+          container.innerHTML = `<div class="empty-state">
+            <div class="empty-icon">📅</div>
+            <p>لا توجد برامج متاحة حالياً</p>
+            <p class="empty-sub">سيتم الإعلان عن المواعيد قريباً</p>
+          </div>`;
+          return;
+        }
+
+        // بناء tabs
+        let tabsHTML = `<div class="tabs-wrapper"><div class="tabs">`;
+        let firstTab = true;
+        for (const [id, data] of Object.entries(visiblePrograms)) {
+          const prog = PROGRAMS_DATA[id] || {};
+          const name = prog.nameAr || data.nameAr || id;
+          tabsHTML += `<button class="tab ${firstTab ? 'active' : ''}" data-tab="${id}">${name}</button>`;
+          firstTab = false;
+        }
+        tabsHTML += `</div></div>`;
+
+        let panelsHTML = ``;
+        firstTab = true;
+        for (const [id, data] of Object.entries(visiblePrograms)) {
+          const prog = PROGRAMS_DATA[id] || {};
+          const events = prog.events || {};
+          const legend = prog.legend || [];
+          const name = prog.nameAr || data.nameAr || id;
+          const notes = data.notes || "";
+
+          panelsHTML += `<div class="tab-panel ${firstTab ? 'active' : ''}" id="panel-${id}">`;
+
+          // legend
+          if (legend.length > 0) {
+            panelsHTML += `<div class="legend">`;
+            for (const l of legend) {
+              panelsHTML += `<div class="legend-item">
+                <span class="legend-dot" style="background:${l.color}"></span>
+                <span>${l.label}</span>
+              </div>`;
+            }
+            panelsHTML += `</div>`;
+          }
+
+          panelsHTML += buildCalendar(id, events);
+
+          if (notes) {
+            panelsHTML += `<div class="notes-box"><span class="notes-label">ملاحظات:</span> ${notes}</div>`;
+          }
+
+          panelsHTML += `</div>`;
+          firstTab = false;
+        }
+
+        container.innerHTML = tabsHTML + panelsHTML;
+
+        // Tab switching
+        document.querySelectorAll(".tab").forEach(btn => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+            btn.classList.add("active");
+            document.getElementById("panel-" + btn.dataset.tab)?.classList.add("active");
+          });
+        });
+      }, (error) => {
+        loading.innerHTML = `<p style="color:#ff4444">خطأ في تحميل البيانات. حاولي مجدداً.</p>`;
+        console.error(error);
+      });
+    });
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #0D40FC;
+      --cyan: #55D7FF;
+      --navy: #001442;
+      --white: #ffffff;
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --text: #0a1628;
+      --muted: #6b7a9a;
+      --border: #e0e8ff;
+      --radius: 16px;
+    }
+
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      direction: rtl;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      padding: 28px 32px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-mark {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 800; color: #fff;
+      flex-shrink: 0;
+    }
+
+    .header-text h1 {
+      font-size: 20px; font-weight: 700;
+      color: #fff; letter-spacing: -0.3px;
+    }
+    .header-text p {
+      font-size: 13px; color: var(--cyan); margin-top: 2px;
+    }
+
+    .header-admin-link {
+      margin-right: auto;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 12px;
+      transition: color 0.2s;
+    }
+    .header-admin-link:hover { color: rgba(255,255,255,0.7); }
+
+    /* ── Loading ── */
+    #loading {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 300px;
+      flex-direction: column; gap: 12px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Main ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 32px 20px 60px; }
+
+    /* ── Tabs ── */
+    .tabs-wrapper { overflow-x: auto; margin-bottom: 28px; }
+    .tabs {
+      display: flex; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 6px;
+      width: fit-content;
+      min-width: 100%;
+    }
+
+    .tab {
+      padding: 10px 22px;
+      border: none; background: transparent;
+      border-radius: 10px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px; font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab:hover { background: var(--bg); color: var(--text); }
+    .tab.active {
+      background: var(--blue); color: #fff;
+      font-weight: 700;
+    }
+
+    /* ── Tab Panel ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fadeIn 0.25s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      margin-bottom: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .legend-dot {
+      width: 12px; height: 12px;
+      border-radius: 4px; flex-shrink: 0;
+    }
+
+    /* ── Year Grid ── */
+    .year-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    /* ── Month Card ── */
+    .month-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px 16px;
+      transition: box-shadow 0.2s;
+    }
+    .month-card:hover { box-shadow: 0 4px 20px rgba(13,64,252,0.08); }
+
+    .month-name {
+      font-size: 15px; font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .days-header {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 6px;
+    }
+    .days-header span {
+      text-align: center;
+      font-size: 11px; font-weight: 600;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+
+    .days-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .day {
+      aspect-ratio: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 500;
+      border-radius: 8px;
+      color: var(--text);
+      transition: transform 0.15s;
+      cursor: default;
+    }
+    .day:hover { transform: scale(1.15); z-index: 1; position: relative; }
+
+    /* Event types */
+    .day.start   { background: #0D40FC; color: #fff; font-weight: 700; }
+    .day.study   { background: #ddeeff; color: #0D40FC; }
+    .day.exam    { background: #FF6B35; color: #fff; font-weight: 700; }
+    .day.break   { background: #A8E6CF; color: #2d6a4f; }
+    .day.holiday { background: #FFD93D; color: #7a5900; }
+    .day.lecture { background: #0D40FC; color: #fff; font-weight: 700; }
+    .day.project { background: #55D7FF; color: #001442; }
+    .day.unit_exam { background: #FF6B35; color: #fff; }
+    .day.final_exam { background: #A8E6CF; color: #2d6a4f; }
+    .day.haj_holiday { background: #FFD93D; color: #7a5900; }
+    .day.obm    { background: #0D40FC; color: #fff; font-weight: 700; }
+    .day.group  { background: #0D40FC; color: #fff; }
+    .day.residence { background: #FF6B35; color: #fff; }
+
+    .day.today {
+      box-shadow: 0 0 0 2px var(--blue);
+      font-weight: 700;
+    }
+
+    /* ── Notes ── */
+    .notes-box {
+      margin-top: 20px;
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #6d4c00;
+    }
+    .notes-label { font-weight: 700; margin-left: 6px; }
+
+    /* ── Empty State ── */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 16px; }
+    .empty-state p { font-size: 17px; font-weight: 600; color: var(--text); }
+    .empty-sub { font-size: 14px !important; font-weight: 400 !important; color: var(--muted) !important; margin-top: 6px; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 20px 16px; }
+      main { padding: 20px 12px 40px; }
+      .year-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .month-card { padding: 12px 10px; }
+      .month-name { font-size: 13px; }
+      .day { font-size: 10px; border-radius: 5px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">س</div>
+  <div class="header-text">
+    <h1>سلوكيرا — التقويم الأكاديمي</h1>
+    <p>Academic Calendar 2026</p>
+  </div>
+  <a href="admin.html" class="header-admin-link">⚙</a>
+</header>
+
+<main>
+  <div id="loading">
+    <div class="spinner"></div>
+    <p style="color:var(--muted);font-size:14px">جاري تحميل التقويم...</p>
+  </div>
+  <div id="programs-container"></div>
+</main>
+
+<footer>
+  © 2026 سلوكيرا — جميع الحقوق محفوظة
+</footer>
+
+</body>
+</html>

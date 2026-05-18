@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة التحكم — سلوكيرا</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCJG0sOcs0Wr6QslTUKmDshs9LapFyjs1w",
+      authDomain: "sulukera-calendar.firebaseapp.com",
+      projectId: "sulukera-calendar",
+      storageBucket: "sulukera-calendar.firebasestorage.app",
+      messagingSenderId: "729863935633",
+      appId: "1:729863935633:web:c3069e853fa11e4d4b9130"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // قائمة البرامج الثابتة
+    const ALL_PROGRAMS = [
+      { id: "ABA",      nameAr: "برنامج ABA",         nameEn: "ABA Program" },
+      { id: "ABA_MAY",  nameAr: "ABA — دفعة مايو",     nameEn: "ABA May Batch" },
+      { id: "BATCH_11", nameAr: "دفعة 11",             nameEn: "Batch 11" },
+      { id: "BATCH_10", nameAr: "دفعة 10",             nameEn: "Batch 10" },
+      { id: "OBM",      nameAr: "OBM-P Live",          nameEn: "OBM-P Live" },
+      { id: "BE",       nameAr: "برنامج BE",            nameEn: "BE Program" },
+      { id: "ABAT",     nameAr: "ABAT Live",           nameEn: "ABAT Live" },
+      { id: "OBM_EC",   nameAr: "OBM E&C",             nameEn: "OBM E&C" },
+    ];
+
+    // ══════════════════════════════════════
+    // Auth State
+    // ══════════════════════════════════════
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("dashboard").style.display = "block";
+        document.getElementById("user-email").textContent = user.email;
+        loadDashboard();
+      } else {
+        document.getElementById("login-screen").style.display = "flex";
+        document.getElementById("dashboard").style.display = "none";
+      }
+    });
+
+    // ══════════════════════════════════════
+    // Login
+    // ══════════════════════════════════════
+    window.doLogin = async () => {
+      const email = document.getElementById("email").value.trim();
+      const pass  = document.getElementById("password").value;
+      const btn   = document.getElementById("login-btn");
+      const err   = document.getElementById("login-error");
+
+      err.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "جاري الدخول...";
+
+      try {
+        await signInWithEmailAndPassword(auth, email, pass);
+      } catch (e) {
+        err.textContent = "البريد الإلكتروني أو كلمة السر غير صحيحة";
+        btn.disabled = false;
+        btn.textContent = "دخول";
+      }
+    };
+
+    window.doLogout = async () => {
+      await signOut(auth);
+    };
+
+    // Enter key on password
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("password")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") window.doLogin();
+      });
+    });
+
+    // ══════════════════════════════════════
+    // Dashboard
+    // ══════════════════════════════════════
+    async function loadDashboard() {
+      const grid = document.getElementById("programs-grid");
+      grid.innerHTML = `<div class="loading-dash"><div class="spinner"></div></div>`;
+
+      // Initialize missing programs
+      for (const prog of ALL_PROGRAMS) {
+        const ref = doc(db, "calendars", prog.id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+          await setDoc(ref, { visible: false, nameAr: prog.nameAr, notes: "" });
+        }
+      }
+
+      // Listen real-time
+      onSnapshot(collection(db, "calendars"), (snapshot) => {
+        const data = {};
+        snapshot.forEach(d => { data[d.id] = d.data(); });
+        renderGrid(data);
+      });
+    }
+
+    function renderGrid(data) {
+      const grid = document.getElementById("programs-grid");
+
+      // Stats
+      const total   = ALL_PROGRAMS.length;
+      const visible = ALL_PROGRAMS.filter(p => data[p.id]?.visible).length;
+      document.getElementById("stat-total").textContent   = total;
+      document.getElementById("stat-visible").textContent = visible;
+      document.getElementById("stat-hidden").textContent  = total - visible;
+
+      let html = "";
+      for (const prog of ALL_PROGRAMS) {
+        const state = data[prog.id] || { visible: false, notes: "" };
+        const isOn  = state.visible;
+        const notes = state.notes || "";
+
+        html += `
+        <div class="prog-card ${isOn ? 'on' : 'off'}">
+          <div class="prog-header">
+            <div class="prog-info">
+              <span class="prog-badge">${prog.id}</span>
+              <h3 class="prog-name">${prog.nameAr}</h3>
+            </div>
+            <button class="toggle-btn ${isOn ? 'active' : ''}"
+              onclick="toggleProgram('${prog.id}', ${!isOn})">
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+              <span class="toggle-label">${isOn ? 'ظاهر' : 'مخفي'}</span>
+            </button>
+          </div>
+          <div class="prog-status ${isOn ? 'status-on' : 'status-off'}">
+            ${isOn ? '✓ يظهر للطلاب الآن' : '✗ مخفي عن الطلاب'}
+          </div>
+          <div class="notes-row">
+            <input
+              class="notes-input"
+              id="notes-${prog.id}"
+              type="text"
+              placeholder="ملاحظة تظهر أسفل التقويم (اختياري)..."
+              value="${notes}"
+              onblur="saveNotes('${prog.id}')"
+              onkeydown="if(event.key==='Enter') saveNotes('${prog.id}')"
+            />
+            <button class="save-note-btn" onclick="saveNotes('${prog.id}')">حفظ</button>
+          </div>
+        </div>`;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    window.toggleProgram = async (id, newState) => {
+      try {
+        await setDoc(doc(db, "calendars", id), { visible: newState }, { merge: true });
+        showToast(newState ? `✓ تم إظهار البرنامج للطلاب` : `✗ تم إخفاء البرنامج`);
+      } catch (e) {
+        showToast("حدث خطأ، حاولي مجدداً", "error");
+      }
+    };
+
+    window.saveNotes = async (id) => {
+      const val = document.getElementById(`notes-${id}`)?.value || "";
+      try {
+        await setDoc(doc(db, "calendars", id), { notes: val }, { merge: true });
+        showToast("تم حفظ الملاحظة");
+      } catch (e) {
+        showToast("خطأ في الحفظ", "error");
+      }
+    };
+
+    // ══════════════════════════════════════
+    // Toast
+    // ══════════════════════════════════════
+    window.showToast = (msg, type = "success") => {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = "toast show " + type;
+      setTimeout(() => t.classList.remove("show"), 3000);
+    };
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #0D40FC;
+      --cyan: #55D7FF;
+      --navy: #001442;
+      --white: #ffffff;
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --text: #0a1628;
+      --muted: #6b7a9a;
+      --border: #e0e8ff;
+      --green: #00c851;
+      --red: #ff4444;
+      --radius: 16px;
+    }
+
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      direction: rtl;
+    }
+
+    /* ══ Login Screen ══ */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--navy);
+    }
+
+    .login-box {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .login-logo {
+      width: 60px; height: 60px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 800; color: #fff;
+      margin: 0 auto 20px;
+    }
+
+    .login-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .login-box p  { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+
+    .field {
+      margin-bottom: 14px;
+      text-align: right;
+    }
+    .field label {
+      display: block;
+      font-size: 13px; font-weight: 600;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      direction: ltr; text-align: left;
+    }
+    .field input:focus { border-color: var(--blue); }
+
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .login-btn:hover   { background: #0a35d4; }
+    .login-btn:active  { transform: scale(0.98); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .login-error {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--red);
+      min-height: 18px;
+    }
+
+    /* ══ Dashboard ══ */
+    #dashboard { display: none; }
+
+    header {
+      background: var(--navy);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-mark {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      flex-shrink: 0;
+    }
+
+    .header-text h1 { font-size: 17px; font-weight: 700; color: #fff; }
+    .header-text p  { font-size: 12px; color: var(--cyan); margin-top: 1px; }
+
+    .header-actions {
+      margin-right: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #user-email { font-size: 12px; color: rgba(255,255,255,0.5); }
+
+    .view-btn {
+      padding: 8px 16px;
+      background: rgba(85,215,255,0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(85,215,255,0.3);
+      border-radius: 8px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .view-btn:hover { background: rgba(85,215,255,0.25); }
+
+    .logout-btn {
+      padding: 8px 16px;
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+
+    /* ══ Stats Bar ══ */
+    .stats-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      gap: 32px;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .stat-num {
+      font-size: 24px; font-weight: 800;
+      color: var(--blue);
+    }
+    .stat-label { font-size: 13px; color: var(--muted); }
+    .stat.green .stat-num { color: var(--green); }
+    .stat.red   .stat-num { color: var(--muted); }
+
+    /* ══ Main ══ */
+    main { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+
+    .section-title {
+      font-size: 18px; font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--navy);
+    }
+
+    /* ══ Programs Grid ══ */
+    #programs-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .loading-dash {
+      display: flex; justify-content: center; align-items: center;
+      padding: 60px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ══ Program Card ══ */
+    .prog-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .prog-card.on {
+      border-color: rgba(13,64,252,0.25);
+      box-shadow: 0 2px 12px rgba(13,64,252,0.07);
+    }
+    .prog-card.off { opacity: 0.75; }
+    .prog-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); opacity: 1; }
+
+    .prog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .prog-info { display: flex; align-items: center; gap: 10px; }
+
+    .prog-badge {
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px; font-weight: 600;
+      direction: ltr;
+    }
+
+    .prog-name { font-size: 16px; font-weight: 700; color: var(--navy); }
+
+    /* ══ Toggle ══ */
+    .toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: none; border: none;
+      cursor: pointer;
+      font-family: 'Tajawal', sans-serif;
+    }
+
+    .toggle-track {
+      width: 48px; height: 26px;
+      background: #dde3f0;
+      border-radius: 13px;
+      position: relative;
+      transition: background 0.25s;
+    }
+    .toggle-btn.active .toggle-track { background: var(--blue); }
+
+    .toggle-thumb {
+      position: absolute;
+      width: 20px; height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      top: 3px; right: 3px;
+      transition: transform 0.25s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    .toggle-btn.active .toggle-thumb { transform: translateX(-22px); }
+
+    .toggle-label {
+      font-size: 13px; font-weight: 600;
+      color: var(--muted);
+      min-width: 32px;
+    }
+    .toggle-btn.active .toggle-label { color: var(--blue); }
+
+    /* ══ Status ══ */
+    .prog-status {
+      font-size: 12px; font-weight: 600;
+      margin-bottom: 14px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    .status-on  { background: #e8fff1; color: #00a040; }
+    .status-off { background: #f5f5f5; color: #999; }
+
+    /* ══ Notes ══ */
+    .notes-row {
+      display: flex; gap: 8px;
+    }
+
+    .notes-input {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--bg);
+    }
+    .notes-input::placeholder { color: #bbb; }
+    .notes-input:focus { border-color: var(--blue); background: #fff; }
+
+    .save-note-btn {
+      padding: 9px 16px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px; font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .save-note-btn:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+    /* ══ Toast ══ */
+    .toast {
+      position: fixed;
+      bottom: 30px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--navy);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px; font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast.error { background: #c0392b; }
+
+    @media (max-width: 600px) {
+      header { padding: 16px; flex-wrap: wrap; gap: 10px; }
+      .stats-bar { padding: 12px 16px; gap: 20px; }
+      main { padding: 20px 12px 60px; }
+      .prog-card { padding: 16px; }
+      .header-actions { width: 100%; justify-content: flex-end; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Login ══ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">س</div>
+    <h2>لوحة تحكم الأدمن</h2>
+    <p>سلوكيرا — التقويم الأكاديمي 2026</p>
+
+    <div class="field">
+      <label>البريد الإلكتروني</label>
+      <input type="email" id="email" placeholder="admin@sulukera.com" />
+    </div>
+    <div class="field">
+      <label>كلمة السر</label>
+      <input type="password" id="password" placeholder="••••••••" />
+    </div>
+
+    <button class="login-btn" id="login-btn" onclick="doLogin()">دخول</button>
+    <p class="login-error" id="login-error"></p>
+  </div>
+</div>
+
+<!-- ══ Dashboard ══ -->
+<div id="dashboard">
+
+  <header>
+    <div class="logo-mark">س</div>
+    <div class="header-text">
+      <h1>لوحة التحكم</h1>
+      <p>إدارة التقويم الأكاديمي</p>
+    </div>
+    <div class="header-actions">
+      <span id="user-email"></span>
+      <a href="index.html" target="_blank" class="view-btn">← عرض الطلاب</a>
+      <button class="logout-btn" onclick="doLogout()">خروج</button>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-num" id="stat-total">—</span>
+      <span class="stat-label">إجمالي البرامج</span>
+    </div>
+    <div class="stat green">
+      <span class="stat-num" id="stat-visible">—</span>
+      <span class="stat-label">ظاهر للطلاب</span>
+    </div>
+    <div class="stat red">
+      <span class="stat-num" id="stat-hidden">—</span>
+      <span class="stat-label">مخفي حالياً</span>
+    </div>
+  </div>
+
+  <main>
+    <p class="section-title">البرامج الأكاديمية</p>
+    <div id="programs-grid">
+      <div class="loading-dash"><div class="spinner"></div></div>
+    </div>
+  </main>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+</body>
+</html>
