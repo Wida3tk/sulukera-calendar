@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>التقويم الأكاديمي 2026 — سلوكيرا</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <title>التقويم الأكاديمي — سلوكيرا</title>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, onSnapshot, collection }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCJG0sOcs0Wr6QslTUKmDshs9LapFyjs1w",
@@ -22,265 +23,315 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const db  = getFirestore(app);
 
-    // ═══════════════════════════════════════════════
-    // بيانات التقويم الكاملة لكل البرامج
-    // ═══════════════════════════════════════════════
-    const PROGRAMS_DATA = {
+    // ═══════════════════════════════════════════
+    // بيانات البرامج — أحداث 2026 ثابتة في الكود
+    // أحداث 2027 تُقرأ من Firebase
+    // ═══════════════════════════════════════════
+    const PROGRAMS_META = {
+      "ABA":      { nameAr: "برنامج ABA",       legend: defaultLegend() },
+      "ABA_MAY":  { nameAr: "ABA — دفعة مايو",  legend: defaultLegend() },
+      "BATCH_11": { nameAr: "دفعة 11",           legend: defaultLegend() },
+      "BATCH_10": { nameAr: "دفعة 10",           legend: defaultLegend() },
+      "OBM":      { nameAr: "OBM-P Live",        legend: obmLegend()     },
+      "BE":       { nameAr: "برنامج BE",          legend: beLegend()      },
+      "ABAT":     { nameAr: "ABAT Live",         legend: obmLegend()     },
+      "OBM_EC":   { nameAr: "OBM E&C",           legend: obmEcLegend()   },
+    };
+
+    function defaultLegend() {
+      return [
+        { label: "أسابيع دراسية",       color: "#ddeeff" },
+        { label: "أسبوع الاختبارات",    color: "#FF6B35" },
+        { label: "إجازة نهاية الفصل",   color: "#A8E6CF" },
+        { label: "إجازة رسمية",          color: "#FFD93D" },
+      ];
+    }
+    function obmLegend() {
+      return [
+        { label: "جلسة مباشرة", color: "#0D40FC" },
+        { label: "إجازة رسمية", color: "#FFD93D" },
+      ];
+    }
+    function beLegend() {
+      return [
+        { label: "لقاءات جماعية", color: "#0D40FC" },
+        { label: "تواريخ الإقامة", color: "#FF6B35" },
+      ];
+    }
+    function obmEcLegend() {
+      return [
+        { label: "محاضرة",           color: "#0D40FC" },
+        { label: "اختبار الوحدة",    color: "#FF6B35" },
+        { label: "إجازة رسمية",      color: "#FFD93D" },
+      ];
+    }
+
+    // ── بيانات 2026 الثابتة ──
+    const EVENTS_2026 = {
       "ABA": {
-        nameAr: "برنامج ABA",
-        legend: [
-          { label: "أسابيع دراسية", color: "#55D7FF" },
-          { label: "أسبوع الاختبارات", color: "#FF6B35" },
-          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
-          { label: "إجازة رسمية", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-01-26":"study","2026-01-27":"study","2026-01-28":"study","2026-01-29":"study",
-          "2026-02-01":"study","2026-02-02":"study","2026-02-03":"study","2026-02-04":"study","2026-02-05":"study",
-          "2026-02-08":"study","2026-02-09":"study","2026-02-10":"study","2026-02-11":"study","2026-02-12":"study",
-          "2026-02-15":"study","2026-02-16":"study","2026-02-17":"study","2026-02-18":"study","2026-02-19":"study",
-          "2026-02-22":"break","2026-02-23":"exam","2026-02-24":"exam","2026-02-25":"exam","2026-02-26":"exam",
-          "2026-03-01":"holiday","2026-03-02":"holiday","2026-03-03":"holiday","2026-03-04":"holiday","2026-03-05":"holiday",
-          "2026-03-08":"break","2026-03-09":"break","2026-03-10":"break","2026-03-11":"break","2026-03-12":"break",
-          "2026-03-15":"break","2026-03-16":"break","2026-03-17":"break","2026-03-18":"break","2026-03-19":"break",
-          "2026-03-22":"break","2026-03-23":"break","2026-03-24":"break","2026-03-25":"break","2026-03-26":"break",
-          "2026-03-30":"study","2026-03-31":"study",
-          "2026-04-01":"study","2026-04-02":"study","2026-04-05":"study","2026-04-06":"study","2026-04-07":"study","2026-04-08":"study","2026-04-09":"study",
-          "2026-04-12":"study","2026-04-13":"study","2026-04-14":"study","2026-04-15":"study","2026-04-16":"study",
-          "2026-04-19":"study","2026-04-20":"study","2026-04-21":"study","2026-04-22":"study","2026-04-23":"study",
-          "2026-04-26":"exam","2026-04-27":"exam","2026-04-28":"exam","2026-04-29":"exam","2026-04-30":"exam",
-          "2026-05-03":"holiday","2026-05-04":"holiday","2026-05-05":"holiday","2026-05-06":"holiday","2026-05-07":"holiday",
-          "2026-05-11":"study","2026-05-12":"study","2026-05-13":"study","2026-05-14":"study",
-          "2026-05-17":"study","2026-05-18":"study","2026-05-19":"study","2026-05-20":"study","2026-05-21":"study",
-          "2026-05-24":"break","2026-05-25":"break","2026-05-26":"break","2026-05-27":"break","2026-05-28":"break",
-          "2026-06-01":"break","2026-06-02":"break","2026-06-03":"break","2026-06-04":"break",
-          "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
-          "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
-          "2026-06-21":"exam","2026-06-22":"exam","2026-06-23":"exam","2026-06-24":"exam","2026-06-25":"exam",
-          "2026-06-28":"holiday","2026-06-29":"holiday","2026-06-30":"holiday",
-          "2026-07-01":"holiday","2026-07-02":"holiday",
-          "2026-07-05":"break","2026-07-06":"break","2026-07-07":"break","2026-07-08":"break","2026-07-09":"break","2026-07-10":"break",
-          "2026-07-12":"break","2026-07-13":"break","2026-07-14":"break","2026-07-15":"break","2026-07-16":"break","2026-07-17":"break",
-          "2026-07-19":"break","2026-07-20":"break","2026-07-21":"break","2026-07-22":"break","2026-07-23":"break","2026-07-24":"break",
-          "2026-07-26":"break","2026-07-27":"break","2026-07-28":"break","2026-07-29":"break","2026-07-30":"break","2026-07-31":"break",
-          "2026-08-02":"break","2026-08-03":"break","2026-08-04":"break","2026-08-05":"break","2026-08-06":"break",
-          "2026-08-10":"study","2026-08-11":"study","2026-08-12":"study","2026-08-13":"study",
-          "2026-08-16":"study","2026-08-17":"study","2026-08-18":"study","2026-08-19":"study","2026-08-20":"study",
-          "2026-08-23":"study","2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
-          "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
-          "2026-09-06":"exam","2026-09-07":"exam","2026-09-08":"exam","2026-09-09":"exam","2026-09-10":"exam",
-          "2026-09-13":"holiday","2026-09-14":"holiday","2026-09-15":"holiday","2026-09-16":"holiday","2026-09-17":"holiday",
-          "2026-09-21":"study","2026-09-22":"study","2026-09-23":"break","2026-09-24":"study",
-          "2026-09-27":"study","2026-09-28":"study","2026-09-29":"study","2026-09-30":"study",
-          "2026-10-01":"study","2026-10-04":"study","2026-10-05":"study","2026-10-06":"study","2026-10-07":"study","2026-10-08":"study",
-          "2026-10-11":"study","2026-10-12":"study","2026-10-13":"study","2026-10-14":"study","2026-10-15":"study",
-          "2026-10-18":"exam","2026-10-19":"exam","2026-10-20":"exam","2026-10-21":"exam","2026-10-22":"exam",
-          "2026-10-25":"holiday","2026-10-26":"holiday","2026-10-27":"holiday","2026-10-28":"holiday","2026-10-29":"holiday",
-          "2026-11-02":"study","2026-11-03":"study","2026-11-04":"study","2026-11-05":"study",
-          "2026-11-08":"study","2026-11-09":"study","2026-11-10":"study","2026-11-11":"study","2026-11-12":"study",
-          "2026-11-15":"study","2026-11-16":"study","2026-11-17":"study","2026-11-18":"study","2026-11-19":"study",
-          "2026-11-22":"study","2026-11-23":"study","2026-11-24":"study","2026-11-25":"study","2026-11-26":"study",
-          "2026-11-29":"exam","2026-11-30":"exam",
-          "2026-12-01":"exam","2026-12-02":"exam","2026-12-03":"exam",
-          "2026-12-06":"holiday","2026-12-07":"holiday","2026-12-08":"holiday","2026-12-09":"holiday","2026-12-10":"holiday"
-        }
+        "2026-01-26":"study","2026-01-27":"study","2026-01-28":"study","2026-01-29":"study",
+        "2026-02-01":"study","2026-02-02":"study","2026-02-03":"study","2026-02-04":"study","2026-02-05":"study",
+        "2026-02-08":"study","2026-02-09":"study","2026-02-10":"study","2026-02-11":"study","2026-02-12":"study",
+        "2026-02-15":"study","2026-02-16":"study","2026-02-17":"study","2026-02-18":"study","2026-02-19":"study",
+        "2026-02-22":"break","2026-02-23":"exam","2026-02-24":"exam","2026-02-25":"exam","2026-02-26":"exam",
+        "2026-03-01":"holiday","2026-03-02":"holiday","2026-03-03":"holiday","2026-03-04":"holiday","2026-03-05":"holiday",
+        "2026-03-08":"break","2026-03-09":"break","2026-03-10":"break","2026-03-11":"break","2026-03-12":"break",
+        "2026-03-15":"break","2026-03-16":"break","2026-03-17":"break","2026-03-18":"break","2026-03-19":"break",
+        "2026-03-22":"break","2026-03-23":"break","2026-03-24":"break","2026-03-25":"break","2026-03-26":"break",
+        "2026-03-30":"study","2026-03-31":"study",
+        "2026-04-01":"study","2026-04-02":"study","2026-04-05":"study","2026-04-06":"study","2026-04-07":"study","2026-04-08":"study","2026-04-09":"study",
+        "2026-04-12":"study","2026-04-13":"study","2026-04-14":"study","2026-04-15":"study","2026-04-16":"study",
+        "2026-04-19":"study","2026-04-20":"study","2026-04-21":"study","2026-04-22":"study","2026-04-23":"study",
+        "2026-04-26":"exam","2026-04-27":"exam","2026-04-28":"exam","2026-04-29":"exam","2026-04-30":"exam",
+        "2026-05-03":"holiday","2026-05-04":"holiday","2026-05-05":"holiday","2026-05-06":"holiday","2026-05-07":"holiday",
+        "2026-05-11":"study","2026-05-12":"study","2026-05-13":"study","2026-05-14":"study",
+        "2026-05-17":"study","2026-05-18":"study","2026-05-19":"study","2026-05-20":"study","2026-05-21":"study",
+        "2026-05-24":"break","2026-05-25":"break","2026-05-26":"break","2026-05-27":"break","2026-05-28":"break",
+        "2026-06-01":"break","2026-06-02":"break","2026-06-03":"break","2026-06-04":"break",
+        "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
+        "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
+        "2026-06-21":"exam","2026-06-22":"exam","2026-06-23":"exam","2026-06-24":"exam","2026-06-25":"exam",
+        "2026-06-28":"holiday","2026-06-29":"holiday","2026-06-30":"holiday",
+        "2026-07-01":"holiday","2026-07-02":"holiday",
+        "2026-07-05":"break","2026-07-06":"break","2026-07-07":"break","2026-07-08":"break","2026-07-09":"break",
+        "2026-07-12":"break","2026-07-13":"break","2026-07-14":"break","2026-07-15":"break","2026-07-16":"break",
+        "2026-07-19":"break","2026-07-20":"break","2026-07-21":"break","2026-07-22":"break","2026-07-23":"break",
+        "2026-07-26":"break","2026-07-27":"break","2026-07-28":"break","2026-07-29":"break","2026-07-30":"break","2026-07-31":"break",
+        "2026-08-02":"break","2026-08-03":"break","2026-08-04":"break","2026-08-05":"break","2026-08-06":"break",
+        "2026-08-10":"study","2026-08-11":"study","2026-08-12":"study","2026-08-13":"study",
+        "2026-08-16":"study","2026-08-17":"study","2026-08-18":"study","2026-08-19":"study","2026-08-20":"study",
+        "2026-08-23":"study","2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
+        "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
+        "2026-09-06":"exam","2026-09-07":"exam","2026-09-08":"exam","2026-09-09":"exam","2026-09-10":"exam",
+        "2026-09-13":"holiday","2026-09-14":"holiday","2026-09-15":"holiday","2026-09-16":"holiday","2026-09-17":"holiday",
+        "2026-09-21":"study","2026-09-22":"study","2026-09-24":"study",
+        "2026-09-27":"study","2026-09-28":"study","2026-09-29":"study","2026-09-30":"study",
+        "2026-10-01":"study","2026-10-04":"study","2026-10-05":"study","2026-10-06":"study","2026-10-07":"study","2026-10-08":"study",
+        "2026-10-11":"study","2026-10-12":"study","2026-10-13":"study","2026-10-14":"study","2026-10-15":"study",
+        "2026-10-18":"exam","2026-10-19":"exam","2026-10-20":"exam","2026-10-21":"exam","2026-10-22":"exam",
+        "2026-10-25":"holiday","2026-10-26":"holiday","2026-10-27":"holiday","2026-10-28":"holiday","2026-10-29":"holiday",
+        "2026-11-02":"study","2026-11-03":"study","2026-11-04":"study","2026-11-05":"study",
+        "2026-11-08":"study","2026-11-09":"study","2026-11-10":"study","2026-11-11":"study","2026-11-12":"study",
+        "2026-11-15":"study","2026-11-16":"study","2026-11-17":"study","2026-11-18":"study","2026-11-19":"study",
+        "2026-11-22":"study","2026-11-23":"study","2026-11-24":"study","2026-11-25":"study","2026-11-26":"study",
+        "2026-11-29":"exam","2026-11-30":"exam",
+        "2026-12-01":"exam","2026-12-02":"exam","2026-12-03":"exam",
+        "2026-12-06":"holiday","2026-12-07":"holiday","2026-12-08":"holiday","2026-12-09":"holiday","2026-12-10":"holiday"
       },
       "ABA_MAY": {
-        nameAr: "ABA — دفعة مايو",
-        legend: [
-          { label: "أسابيع دراسية", color: "#55D7FF" },
-          { label: "أسبوع الاختبارات", color: "#FF6B35" },
-          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
-          { label: "إجازة رسمية", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-05-11":"study","2026-05-12":"study","2026-05-13":"study","2026-05-14":"study",
-          "2026-05-17":"study","2026-05-18":"study","2026-05-19":"study","2026-05-20":"study","2026-05-21":"study",
-          "2026-05-24":"break","2026-05-25":"break","2026-05-26":"break","2026-05-27":"break","2026-05-28":"break",
-          "2026-06-01":"break","2026-06-02":"break","2026-06-03":"break","2026-06-04":"break",
-          "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
-          "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
-          "2026-06-21":"exam","2026-06-22":"exam","2026-06-23":"exam","2026-06-24":"exam","2026-06-25":"exam",
-          "2026-06-28":"holiday","2026-06-29":"holiday","2026-06-30":"holiday",
-          "2026-07-01":"holiday","2026-07-02":"holiday",
-          "2026-07-06":"study","2026-07-07":"study","2026-07-08":"study","2026-07-09":"study",
-          "2026-07-12":"study","2026-07-13":"study","2026-07-14":"study","2026-07-15":"study","2026-07-16":"study",
-          "2026-07-19":"study","2026-07-20":"study","2026-07-21":"study","2026-07-22":"study","2026-07-23":"study",
-          "2026-07-26":"study","2026-07-27":"study","2026-07-28":"study","2026-07-29":"study","2026-07-30":"study",
-          "2026-08-02":"exam","2026-08-03":"exam","2026-08-04":"exam","2026-08-05":"exam","2026-08-06":"exam",
-          "2026-08-09":"holiday","2026-08-10":"holiday","2026-08-11":"holiday","2026-08-12":"holiday","2026-08-13":"holiday",
-          "2026-08-17":"study","2026-08-18":"study","2026-08-19":"study","2026-08-20":"study",
-          "2026-08-23":"study","2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
-          "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
-          "2026-09-06":"exam","2026-09-07":"exam","2026-09-08":"exam","2026-09-09":"exam","2026-09-10":"exam",
-          "2026-09-13":"holiday","2026-09-14":"holiday","2026-09-15":"holiday","2026-09-16":"holiday","2026-09-17":"holiday",
-          "2026-09-21":"study","2026-09-22":"study","2026-09-23":"break","2026-09-24":"study",
-          "2026-09-27":"study","2026-09-28":"study","2026-09-29":"study","2026-09-30":"study",
-          "2026-10-01":"study","2026-10-04":"study","2026-10-05":"study","2026-10-06":"study","2026-10-07":"study","2026-10-08":"study",
-          "2026-10-11":"study","2026-10-12":"study","2026-10-13":"study","2026-10-14":"study","2026-10-15":"study",
-          "2026-10-18":"exam","2026-10-19":"exam","2026-10-20":"exam","2026-10-21":"exam","2026-10-22":"exam",
-          "2026-10-25":"holiday","2026-10-26":"holiday","2026-10-27":"holiday","2026-10-28":"holiday","2026-10-29":"holiday",
-          "2026-11-02":"study","2026-11-03":"study","2026-11-04":"study","2026-11-05":"study",
-          "2026-11-08":"study","2026-11-09":"study","2026-11-10":"study","2026-11-11":"study","2026-11-12":"study",
-          "2026-11-15":"study","2026-11-16":"study","2026-11-17":"study","2026-11-18":"study","2026-11-19":"study",
-          "2026-11-22":"study","2026-11-23":"study","2026-11-24":"study","2026-11-25":"study","2026-11-26":"study",
-          "2026-11-29":"exam","2026-11-30":"exam",
-          "2026-12-01":"exam","2026-12-02":"exam","2026-12-03":"exam",
-          "2026-12-06":"holiday","2026-12-07":"holiday","2026-12-08":"holiday","2026-12-09":"holiday","2026-12-10":"holiday"
-        }
+        "2026-05-11":"study","2026-05-12":"study","2026-05-13":"study","2026-05-14":"study",
+        "2026-05-17":"study","2026-05-18":"study","2026-05-19":"study","2026-05-20":"study","2026-05-21":"study",
+        "2026-05-24":"break","2026-05-25":"break","2026-05-26":"break","2026-05-27":"break","2026-05-28":"break",
+        "2026-06-01":"break","2026-06-02":"break","2026-06-03":"break","2026-06-04":"break",
+        "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
+        "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
+        "2026-06-21":"exam","2026-06-22":"exam","2026-06-23":"exam","2026-06-24":"exam","2026-06-25":"exam",
+        "2026-06-28":"holiday","2026-06-29":"holiday","2026-06-30":"holiday",
+        "2026-07-01":"holiday","2026-07-02":"holiday",
+        "2026-07-06":"study","2026-07-07":"study","2026-07-08":"study","2026-07-09":"study",
+        "2026-07-12":"study","2026-07-13":"study","2026-07-14":"study","2026-07-15":"study","2026-07-16":"study",
+        "2026-07-19":"study","2026-07-20":"study","2026-07-21":"study","2026-07-22":"study","2026-07-23":"study",
+        "2026-07-26":"study","2026-07-27":"study","2026-07-28":"study","2026-07-29":"study","2026-07-30":"study",
+        "2026-08-02":"exam","2026-08-03":"exam","2026-08-04":"exam","2026-08-05":"exam","2026-08-06":"exam",
+        "2026-08-09":"holiday","2026-08-10":"holiday","2026-08-11":"holiday","2026-08-12":"holiday","2026-08-13":"holiday",
+        "2026-08-17":"study","2026-08-18":"study","2026-08-19":"study","2026-08-20":"study",
+        "2026-08-23":"study","2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
+        "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
+        "2026-09-06":"exam","2026-09-07":"exam","2026-09-08":"exam","2026-09-09":"exam","2026-09-10":"exam",
+        "2026-09-13":"holiday","2026-09-14":"holiday","2026-09-15":"holiday","2026-09-16":"holiday","2026-09-17":"holiday",
+        "2026-11-02":"study","2026-11-08":"study","2026-11-15":"study","2026-11-22":"study",
+        "2026-11-29":"exam","2026-12-06":"holiday"
       },
       "BATCH_11": {
-        nameAr: "دفعة 11",
-        legend: [
-          { label: "أسابيع دراسية", color: "#55D7FF" },
-          { label: "أسبوع الاختبارات", color: "#FF6B35" },
-          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
-          { label: "إجازة رسمية", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-06-01":"study","2026-06-02":"study","2026-06-03":"study","2026-06-04":"study",
-          "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
-          "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
-          "2026-06-21":"study","2026-06-22":"study","2026-06-23":"study","2026-06-24":"study","2026-06-25":"study",
-          "2026-06-28":"exam","2026-06-29":"exam","2026-06-30":"exam",
-          "2026-07-01":"exam","2026-07-02":"exam",
-          "2026-07-05":"holiday","2026-07-06":"holiday","2026-07-07":"holiday","2026-07-08":"holiday","2026-07-09":"holiday",
-          "2026-07-13":"study","2026-07-14":"study","2026-07-15":"study","2026-07-16":"study",
-          "2026-07-19":"study","2026-07-20":"study","2026-07-21":"study","2026-07-22":"study","2026-07-23":"study",
-          "2026-07-26":"study","2026-07-27":"study","2026-07-28":"study","2026-07-29":"study","2026-07-30":"study",
-          "2026-08-09":"exam","2026-08-10":"exam","2026-08-11":"exam","2026-08-12":"exam","2026-08-13":"exam",
-          "2026-08-16":"holiday","2026-08-17":"holiday","2026-08-18":"holiday","2026-08-19":"holiday","2026-08-20":"holiday",
-          "2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
-          "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
-          "2026-09-06":"study","2026-09-07":"study","2026-09-08":"study","2026-09-09":"study","2026-09-10":"study",
-          "2026-09-13":"study","2026-09-14":"study","2026-09-15":"study","2026-09-16":"study","2026-09-17":"study",
-          "2026-09-20":"exam","2026-09-21":"exam","2026-09-22":"exam","2026-09-23":"exam","2026-09-24":"exam",
-          "2026-09-27":"holiday","2026-09-28":"holiday","2026-09-29":"holiday","2026-09-30":"holiday",
-          "2026-10-01":"holiday",
-          "2026-10-05":"study","2026-10-06":"study","2026-10-07":"study","2026-10-08":"study",
-          "2026-10-11":"study","2026-10-12":"study","2026-10-13":"study","2026-10-14":"study","2026-10-15":"study",
-          "2026-10-18":"study","2026-10-19":"study","2026-10-20":"study","2026-10-21":"study","2026-10-22":"study",
-          "2026-10-25":"study","2026-10-26":"study","2026-10-27":"study","2026-10-28":"study","2026-10-29":"study",
-          "2026-11-01":"exam","2026-11-02":"exam","2026-11-03":"exam","2026-11-04":"exam","2026-11-05":"exam",
-          "2026-11-08":"holiday","2026-11-09":"holiday","2026-11-10":"holiday","2026-11-11":"holiday","2026-11-12":"holiday",
-          "2026-11-15":"study","2026-11-16":"study","2026-11-17":"study","2026-11-18":"study","2026-11-19":"study",
-          "2026-11-22":"study","2026-11-23":"study","2026-11-24":"study","2026-11-25":"study","2026-11-26":"study",
-          "2026-11-29":"study","2026-11-30":"study",
-          "2026-12-01":"study","2026-12-02":"study","2026-12-03":"study",
-          "2026-12-06":"exam","2026-12-07":"exam","2026-12-08":"exam","2026-12-09":"exam","2026-12-10":"exam",
-          "2026-12-13":"holiday","2026-12-14":"holiday","2026-12-15":"holiday","2026-12-16":"holiday","2026-12-17":"holiday"
-        }
+        "2026-06-01":"study","2026-06-07":"study","2026-06-14":"study","2026-06-21":"study",
+        "2026-06-28":"exam","2026-07-05":"holiday",
+        "2026-07-13":"study","2026-07-19":"study","2026-07-26":"study",
+        "2026-08-09":"exam","2026-08-16":"holiday",
+        "2026-08-24":"study","2026-09-01":"study","2026-09-06":"study","2026-09-13":"study",
+        "2026-09-20":"exam","2026-09-27":"holiday",
+        "2026-10-05":"study","2026-10-11":"study","2026-10-18":"study","2026-10-25":"study",
+        "2026-11-01":"exam","2026-11-08":"holiday",
+        "2026-11-15":"study","2026-11-22":"study","2026-11-29":"study",
+        "2026-12-06":"exam","2026-12-13":"holiday"
       },
       "BATCH_10": {
-        nameAr: "دفعة 10",
-        legend: [
-          { label: "أسابيع دراسية", color: "#55D7FF" },
-          { label: "أسبوع الاختبارات", color: "#FF6B35" },
-          { label: "إجازة نهاية الفصل", color: "#A8E6CF" },
-          { label: "إجازة رسمية", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-05-11":"study","2026-05-12":"study","2026-05-13":"study","2026-05-14":"study",
-          "2026-05-17":"study","2026-05-18":"study","2026-05-19":"study","2026-05-20":"study","2026-05-21":"study",
-          "2026-05-24":"break","2026-05-25":"break","2026-05-26":"break","2026-05-27":"break","2026-05-28":"break",
-          "2026-06-01":"break","2026-06-02":"break","2026-06-03":"break","2026-06-04":"break",
-          "2026-06-07":"study","2026-06-08":"study","2026-06-09":"study","2026-06-10":"study","2026-06-11":"study",
-          "2026-06-14":"study","2026-06-15":"study","2026-06-16":"study","2026-06-17":"study","2026-06-18":"study",
-          "2026-06-21":"exam","2026-06-22":"exam","2026-06-23":"exam","2026-06-24":"exam","2026-06-25":"exam",
-          "2026-06-28":"holiday","2026-06-29":"holiday","2026-06-30":"holiday",
-          "2026-08-02":"exam","2026-08-03":"exam","2026-08-04":"exam","2026-08-05":"exam","2026-08-06":"exam",
-          "2026-08-09":"holiday","2026-08-10":"holiday","2026-08-11":"holiday","2026-08-12":"holiday","2026-08-13":"holiday",
-          "2026-08-17":"study","2026-08-18":"study","2026-08-19":"study","2026-08-20":"study",
-          "2026-08-23":"study","2026-08-24":"study","2026-08-25":"study","2026-08-26":"study","2026-08-27":"study",
-          "2026-09-01":"study","2026-09-02":"study","2026-09-03":"study",
-          "2026-09-06":"exam","2026-09-07":"exam","2026-09-08":"exam","2026-09-09":"exam","2026-09-10":"exam",
-          "2026-09-13":"holiday","2026-09-14":"holiday","2026-09-15":"holiday","2026-09-16":"holiday","2026-09-17":"holiday",
-          "2026-09-21":"study","2026-09-22":"study","2026-09-23":"break","2026-09-24":"study",
-          "2026-09-27":"study","2026-09-28":"study","2026-09-29":"study","2026-09-30":"study",
-          "2026-10-01":"study","2026-10-04":"study","2026-10-05":"study","2026-10-06":"study","2026-10-07":"study","2026-10-08":"study",
-          "2026-10-11":"study","2026-10-12":"study","2026-10-13":"study","2026-10-14":"study","2026-10-15":"study",
-          "2026-10-18":"exam","2026-10-19":"exam","2026-10-20":"exam","2026-10-21":"exam","2026-10-22":"exam",
-          "2026-10-25":"holiday","2026-10-26":"holiday","2026-10-27":"holiday","2026-10-28":"holiday","2026-10-29":"holiday",
-          "2026-11-02":"study","2026-11-03":"study","2026-11-04":"study","2026-11-05":"study",
-          "2026-11-08":"study","2026-11-09":"study","2026-11-10":"study","2026-11-11":"study","2026-11-12":"study",
-          "2026-11-15":"study","2026-11-16":"study","2026-11-17":"study","2026-11-18":"study","2026-11-19":"study",
-          "2026-11-22":"study","2026-11-23":"study","2026-11-24":"study","2026-11-25":"study","2026-11-26":"study",
-          "2026-11-29":"exam","2026-11-30":"exam",
-          "2026-12-01":"exam","2026-12-02":"exam","2026-12-03":"exam",
-          "2026-12-06":"holiday","2026-12-07":"holiday","2026-12-08":"holiday","2026-12-09":"holiday","2026-12-10":"holiday"
-        }
+        "2026-05-11":"study","2026-05-17":"study","2026-05-24":"break",
+        "2026-06-01":"break","2026-06-07":"study","2026-06-14":"study",
+        "2026-06-21":"exam","2026-06-28":"holiday",
+        "2026-08-02":"exam","2026-08-09":"holiday","2026-08-17":"study","2026-08-23":"study",
+        "2026-09-01":"study","2026-09-06":"exam","2026-09-13":"holiday",
+        "2026-09-21":"study","2026-09-27":"study","2026-10-01":"study","2026-10-04":"study","2026-10-11":"study",
+        "2026-10-18":"exam","2026-10-25":"holiday",
+        "2026-11-02":"study","2026-11-08":"study","2026-11-15":"study","2026-11-22":"study",
+        "2026-11-29":"exam","2026-12-06":"holiday"
       },
       "OBM": {
-        nameAr: "OBM-P Live",
-        legend: [
-          { label: "OBM-P Live", color: "#0D40FC" },
-          { label: "إجازة الحج", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-05-17":"obm","2026-05-18":"obm","2026-05-19":"obm","2026-05-20":"obm","2026-05-21":"obm",
-          "2026-05-24":"obm","2026-05-25":"obm","2026-05-26":"obm","2026-05-27":"obm","2026-05-28":"obm"
-        }
+        "2026-05-17":"obm","2026-05-18":"obm","2026-05-19":"obm","2026-05-20":"obm","2026-05-21":"obm",
+        "2026-05-24":"obm","2026-05-25":"obm","2026-05-26":"obm","2026-05-27":"obm","2026-05-28":"obm"
       },
-      "BE": {
-        nameAr: "برنامج BE",
-        legend: [
-          { label: "لقاءات جماعية", color: "#0D40FC" },
-          { label: "تواريخ الإقامة", color: "#FF6B35" }
-        ],
-        events: {}
-      },
+      "BE": {},
       "ABAT": {
-        nameAr: "ABAT Live",
-        legend: [
-          { label: "ABAT", color: "#0D40FC" },
-          { label: "إجازة الحج", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-05-24":"obm","2026-05-25":"obm","2026-05-26":"obm","2026-05-27":"obm","2026-05-28":"obm"
-        }
+        "2026-05-24":"obm","2026-05-25":"obm","2026-05-26":"obm","2026-05-27":"obm","2026-05-28":"obm"
       },
       "OBM_EC": {
-        nameAr: "OBM E&C",
-        legend: [
-          { label: "محاضرة", color: "#0D40FC" },
-          { label: "اختبار الوحدة", color: "#FF6B35" },
-          { label: "إجازة الحج", color: "#FFD93D" }
-        ],
-        events: {
-          "2026-04-22":"exam","2026-05-06":"exam","2026-05-20":"exam",
-          "2026-05-24":"holiday","2026-05-25":"holiday","2026-05-26":"holiday","2026-05-27":"holiday","2026-05-28":"holiday",
-          "2026-06-01":"holiday","2026-06-02":"holiday","2026-06-03":"holiday","2026-06-04":"holiday"
-        }
+        "2026-04-22":"exam","2026-05-06":"exam","2026-05-20":"exam",
+        "2026-05-24":"holiday","2026-05-25":"holiday","2026-05-26":"holiday","2026-05-27":"holiday","2026-05-28":"holiday",
+        "2026-06-01":"holiday","2026-06-02":"holiday","2026-06-03":"holiday","2026-06-04":"holiday"
       }
     };
 
-    const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-    const DAYS_AR = ["ح","ن","ث","ر","خ","ج","س"];
+    const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو",
+                       "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const DAYS_AR   = ["ح","ن","ث","ر","خ","ج","س"];
 
-    function buildCalendar(programId, events) {
-      const months = [];
-      for (let m = 0; m < 12; m++) {
-        const firstDay = new Date(2026, m, 1).getDay();
-        const daysInMonth = new Date(2026, m + 1, 0).getDate();
-        months.push({ month: m, firstDay, daysInMonth });
+    // حالة التطبيق
+    let currentYear       = 2026;
+    let activeProgram     = null;
+    let firebaseData      = {};  // بيانات Firebase (visible, notes, events_2027)
+
+    // ═══════════════════════════════════════════
+    // Firebase listener
+    // ═══════════════════════════════════════════
+    window.addEventListener("DOMContentLoaded", () => {
+      onSnapshot(collection(db, "calendars"), snap => {
+        firebaseData = {};
+        snap.forEach(d => { firebaseData[d.id] = d.data(); });
+        render();
+      }, err => {
+        document.getElementById("loading").innerHTML =
+          `<p style="color:#f44">خطأ في تحميل البيانات</p>`;
+      });
+    });
+
+    // ═══════════════════════════════════════════
+    // Render
+    // ═══════════════════════════════════════════
+    function render() {
+      const loading   = document.getElementById("loading");
+      const container = document.getElementById("programs-container");
+      loading.style.display = "none";
+
+      // البرامج الظاهرة فقط
+      const visible = Object.keys(PROGRAMS_META).filter(id => firebaseData[id]?.visible);
+
+      if (visible.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+          <div class="empty-icon">📅</div>
+          <p>لا توجد برامج متاحة حالياً</p>
+          <p class="empty-sub">سيتم الإعلان عن المواعيد قريباً</p>
+        </div>`;
+        return;
       }
 
+      // أول برنامج ظاهر افتراضياً
+      if (!activeProgram || !visible.includes(activeProgram)) {
+        activeProgram = visible[0];
+      }
+
+      // ── Tabs برامج ──
+      let html = `<div class="tabs-wrapper"><div class="tabs">`;
+      for (const id of visible) {
+        const name = PROGRAMS_META[id]?.nameAr || id;
+        html += `<button class="tab ${id===activeProgram?"active":""}"
+          onclick="switchProgram('${id}')">${name}</button>`;
+      }
+      html += `</div></div>`;
+
+      // ── محتوى البرنامج النشط ──
+      html += buildProgramPanel(activeProgram);
+
+      container.innerHTML = html;
+    }
+
+    window.switchProgram = id => {
+      activeProgram = id;
+      render();
+      window.scrollTo({top:0,behavior:"smooth"});
+    };
+
+    window.switchYear = yr => {
+      currentYear = yr;
+      document.querySelectorAll(".yr-btn").forEach(b =>
+        b.classList.toggle("active", +b.dataset.yr === yr));
+      const panel = document.getElementById("cal-panel");
+      if (panel) panel.innerHTML = buildCalendarHTML();
+    };
+
+    function buildProgramPanel(id) {
+      const meta   = PROGRAMS_META[id] || {};
+      const fbData = firebaseData[id]  || {};
+      const notes  = fbData.notes      || "";
+      const legend = meta.legend       || [];
+
+      // أحداث: 2026 من الكود، 2027 من Firebase
+      const events2026 = EVENTS_2026[id] || {};
+      const events2027 = fbData.events_2027 || {};
+      const events     = currentYear === 2026 ? events2026 : events2027;
+
+      // legend html
+      let legendHtml = "";
+      if (legend.length) {
+        legendHtml = `<div class="legend">` +
+          legend.map(l => `<div class="legend-item">
+            <span class="legend-dot" style="background:${l.color}"></span>
+            <span>${l.label}</span>
+          </div>`).join("") +
+          `</div>`;
+      }
+
+      return `
+        <div class="program-panel">
+          <div class="panel-top">
+            ${legendHtml}
+            <div class="panel-controls">
+              <div class="yr-switcher">
+                <button class="yr-btn ${currentYear===2026?"active":""}" data-yr="2026"
+                  onclick="switchYear(2026)">2026</button>
+                <button class="yr-btn ${currentYear===2027?"active":""}" data-yr="2027"
+                  onclick="switchYear(2027)">2027</button>
+              </div>
+              <button class="pdf-btn" onclick="exportPDF('${id}')">
+                ⬇ تصدير PDF
+              </button>
+            </div>
+          </div>
+          <div id="cal-panel">${buildCalendarHTML(id, events)}</div>
+          ${notes ? `<div class="notes-box"><span class="notes-label">ملاحظات:</span> ${notes}</div>` : ""}
+        </div>`;
+    }
+
+    function buildCalendarHTML(id, eventsOverride) {
+      const progId = id || activeProgram;
+      const fbData = firebaseData[progId] || {};
+      let events;
+      if (eventsOverride !== undefined) {
+        events = eventsOverride;
+      } else {
+        events = currentYear === 2026
+          ? (EVENTS_2026[progId] || {})
+          : (fbData.events_2027 || {});
+      }
+
+      const yr  = currentYear;
+      const now = new Date();
+
       let html = `<div class="year-grid">`;
-      for (const { month, firstDay, daysInMonth } of months) {
+      for (let m = 0; m < 12; m++) {
+        const fd  = new Date(yr, m, 1).getDay();
+        const dim = new Date(yr, m+1, 0).getDate();
         html += `<div class="month-card">
-          <div class="month-name">${MONTHS_AR[month]}</div>
+          <div class="month-name">${MONTHS_AR[m]}</div>
           <div class="days-header">`;
-        for (const d of DAYS_AR) html += `<span>${d}</span>`;
+        DAYS_AR.forEach(d => { html += `<span>${d}</span>`; });
         html += `</div><div class="days-grid">`;
-        for (let i = 0; i < firstDay; i++) html += `<span></span>`;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateStr = `2026-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-          const type = events[dateStr] || "";
-          const today = new Date();
-          const isToday = today.getFullYear() === 2026 && today.getMonth() === month && today.getDate() === d;
-          html += `<span class="day ${type} ${isToday ? 'today' : ''}" title="${dateStr}">${d}</span>`;
+        for (let i=0; i<fd; i++) html += `<span></span>`;
+        for (let d=1; d<=dim; d++) {
+          const ds      = `${yr}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const type    = events[ds] || "";
+          const isToday = now.getFullYear()===yr && now.getMonth()===m && now.getDate()===d;
+          html += `<span class="day ${type} ${isToday?"today":""}">${d}</span>`;
         }
         html += `</div></div>`;
       }
@@ -288,330 +339,227 @@
       return html;
     }
 
-    window.addEventListener("DOMContentLoaded", async () => {
-      const container = document.getElementById("programs-container");
-      const loading = document.getElementById("loading");
+    // ═══════════════════════════════════════════
+    // PDF Export
+    // ═══════════════════════════════════════════
+    window.exportPDF = async (progId) => {
+      const btn  = document.querySelector(".pdf-btn");
+      const meta = PROGRAMS_META[progId] || {};
+      const name = meta.nameAr || progId;
 
-      // استمع للتغييرات في الوقت الفعلي
-      const colRef = collection(db, "calendars");
-      onSnapshot(colRef, (snapshot) => {
-        const visiblePrograms = {};
-        snapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.visible) visiblePrograms[docSnap.id] = data;
-        });
+      btn.disabled = true;
+      btn.textContent = "⏳ جاري التصدير...";
 
-        loading.style.display = "none";
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
-        if (Object.keys(visiblePrograms).length === 0) {
-          container.innerHTML = `<div class="empty-state">
-            <div class="empty-icon">📅</div>
-            <p>لا توجد برامج متاحة حالياً</p>
-            <p class="empty-sub">سيتم الإعلان عن المواعيد قريباً</p>
+        const fbData = firebaseData[progId] || {};
+        const events = currentYear === 2026
+          ? (EVENTS_2026[progId] || {})
+          : (fbData.events_2027 || {});
+
+        const legend = meta.legend || [];
+
+        // بناء صفحة مؤقتة للطباعة
+        const printDiv = document.createElement("div");
+        printDiv.id    = "pdf-print-area";
+        printDiv.style.cssText = `
+          position:fixed; top:-9999px; left:-9999px;
+          width:1050px; background:#fff; padding:32px;
+          font-family:'Tajawal',sans-serif; direction:rtl;
+        `;
+
+        // header
+        printDiv.innerHTML = `
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #0D40FC;">
+            <div style="width:48px;height:48px;background:linear-gradient(135deg,#0D40FC,#55D7FF);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0;">س</div>
+            <div>
+              <div style="font-size:18px;font-weight:800;color:#001442;">سلوكيرا — التقويم الأكاديمي ${currentYear}</div>
+              <div style="font-size:13px;color:#6b7a9a;margin-top:2px;">${name}</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+            ${legend.map(l=>`
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#555;">
+                <span style="width:12px;height:12px;border-radius:3px;background:${l.color};display:inline-block;"></span>
+                ${l.label}
+              </div>`).join("")}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">${buildPrintCalendar(events, currentYear)}</div>
+          <div style="margin-top:16px;text-align:center;font-size:10px;color:#aaa;">
+            sulukera.com — جميع الحقوق محفوظة © ${currentYear}
           </div>`;
-          return;
-        }
 
-        // بناء tabs
-        let tabsHTML = `<div class="tabs-wrapper"><div class="tabs">`;
-        let firstTab = true;
-        for (const [id, data] of Object.entries(visiblePrograms)) {
-          const prog = PROGRAMS_DATA[id] || {};
-          const name = prog.nameAr || data.nameAr || id;
-          tabsHTML += `<button class="tab ${firstTab ? 'active' : ''}" data-tab="${id}">${name}</button>`;
-          firstTab = false;
-        }
-        tabsHTML += `</div></div>`;
+        document.body.appendChild(printDiv);
 
-        let panelsHTML = ``;
-        firstTab = true;
-        for (const [id, data] of Object.entries(visiblePrograms)) {
-          const prog = PROGRAMS_DATA[id] || {};
-          const events = prog.events || {};
-          const legend = prog.legend || [];
-          const name = prog.nameAr || data.nameAr || id;
-          const notes = data.notes || "";
-
-          panelsHTML += `<div class="tab-panel ${firstTab ? 'active' : ''}" id="panel-${id}">`;
-
-          // legend
-          if (legend.length > 0) {
-            panelsHTML += `<div class="legend">`;
-            for (const l of legend) {
-              panelsHTML += `<div class="legend-item">
-                <span class="legend-dot" style="background:${l.color}"></span>
-                <span>${l.label}</span>
-              </div>`;
-            }
-            panelsHTML += `</div>`;
-          }
-
-          panelsHTML += buildCalendar(id, events);
-
-          if (notes) {
-            panelsHTML += `<div class="notes-box"><span class="notes-label">ملاحظات:</span> ${notes}</div>`;
-          }
-
-          panelsHTML += `</div>`;
-          firstTab = false;
-        }
-
-        container.innerHTML = tabsHTML + panelsHTML;
-
-        // Tab switching
-        document.querySelectorAll(".tab").forEach(btn => {
-          btn.addEventListener("click", () => {
-            document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-            document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-            btn.classList.add("active");
-            document.getElementById("panel-" + btn.dataset.tab)?.classList.add("active");
-          });
+        const canvas = await html2canvas(printDiv, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false
         });
-      }, (error) => {
-        loading.innerHTML = `<p style="color:#ff4444">خطأ في تحميل البيانات. حاولي مجدداً.</p>`;
-        console.error(error);
-      });
-    });
+
+        document.body.removeChild(printDiv);
+
+        const imgData = canvas.toDataURL("image/png");
+        const pageW   = pdf.internal.pageSize.getWidth();
+        const pageH   = pdf.internal.pageSize.getHeight();
+        const ratio   = canvas.height / canvas.width;
+        const imgH    = pageW * ratio;
+
+        if (imgH <= pageH) {
+          pdf.addImage(imgData, "PNG", 0, 0, pageW, imgH);
+        } else {
+          // صفحتين إذا طال
+          const half   = canvas.height / 2;
+          const c1     = document.createElement("canvas");
+          c1.width     = canvas.width; c1.height = half;
+          c1.getContext("2d").drawImage(canvas, 0, 0, canvas.width, half, 0, 0, canvas.width, half);
+          const c2     = document.createElement("canvas");
+          c2.width     = canvas.width; c2.height = half;
+          c2.getContext("2d").drawImage(canvas, 0, half, canvas.width, half, 0, 0, canvas.width, half);
+          pdf.addImage(c1.toDataURL("image/png"), "PNG", 0, 0, pageW, pageH);
+          pdf.addPage();
+          pdf.addImage(c2.toDataURL("image/png"), "PNG", 0, 0, pageW, pageH);
+        }
+
+        pdf.save(`sulukera-${progId}-${currentYear}.pdf`);
+
+      } catch (e) {
+        console.error(e);
+        alert("حدث خطأ أثناء التصدير، حاولي مجدداً");
+      }
+
+      btn.disabled = false;
+      btn.textContent = "⬇ تصدير PDF";
+    };
+
+    function buildPrintCalendar(events, yr) {
+      const DAYS_PRINT = ["ح","ن","ث","ر","خ","ج","س"];
+      let html = "";
+      for (let m=0; m<12; m++) {
+        const fd  = new Date(yr, m, 1).getDay();
+        const dim = new Date(yr, m+1, 0).getDate();
+        const TYPE_COLORS = {
+          study:   "#ddeeff", exam: "#FF6B35", break: "#A8E6CF",
+          holiday: "#FFD93D", obm:  "#0D40FC"
+        };
+        const TYPE_TEXT = {
+          study: "#0D40FC", exam: "#fff", break: "#1a5c3a",
+          holiday: "#7a4f00", obm: "#fff"
+        };
+
+        html += `<div style="background:#f8faff;border:1px solid #e0e8ff;border-radius:10px;padding:10px;">
+          <div style="font-size:12px;font-weight:700;color:#001442;text-align:center;margin-bottom:8px;">${MONTHS_AR[m]}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:3px;">`;
+        DAYS_PRINT.forEach(d => {
+          html += `<span style="text-align:center;font-size:9px;font-weight:600;color:#9aa;padding:2px 0;">${d}</span>`;
+        });
+        html += `</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">`;
+        for (let i=0; i<fd; i++) html += `<span></span>`;
+        for (let d=1; d<=dim; d++) {
+          const ds   = `${yr}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const type = events[ds] || "";
+          const bg   = TYPE_COLORS[type] || "transparent";
+          const tc   = TYPE_TEXT[type]   || "#333";
+          html += `<span style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+            font-size:9px;border-radius:4px;background:${bg};color:${tc};font-weight:${type?"600":"400"};">${d}</span>`;
+        }
+        html += `</div></div>`;
+      }
+      return html;
+    }
   </script>
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#0D40FC;--cyan:#55D7FF;--navy:#001442;
+      --bg:#f4f7ff;--card:#fff;--text:#0a1628;
+      --muted:#6b7a9a;--border:#e0e8ff;--r:16px;
+    }
+    body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;direction:rtl;}
 
-    :root {
-      --blue: #0D40FC;
-      --cyan: #55D7FF;
-      --navy: #001442;
-      --white: #ffffff;
-      --bg: #f4f7ff;
-      --card: #ffffff;
-      --text: #0a1628;
-      --muted: #6b7a9a;
-      --border: #e0e8ff;
-      --radius: 16px;
-    }
+    /* Header */
+    header{background:var(--navy);padding:24px 32px;display:flex;align-items:center;gap:16px;}
+    .logo-mark{width:44px;height:44px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;flex-shrink:0;}
+    .header-text h1{font-size:20px;font-weight:700;color:#fff;}
+    .header-text p{font-size:13px;color:var(--cyan);margin-top:2px;}
+    .header-admin-link{margin-right:auto;color:rgba(255,255,255,.3);text-decoration:none;font-size:13px;transition:.2s;}
+    .header-admin-link:hover{color:rgba(255,255,255,.7);}
 
-    body {
-      font-family: 'Tajawal', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      direction: rtl;
-    }
+    /* Loading */
+    #loading{display:flex;align-items:center;justify-content:center;min-height:300px;flex-direction:column;gap:12px;}
+    .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
 
-    /* ── Header ── */
-    header {
-      background: var(--navy);
-      padding: 28px 32px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
+    /* Main */
+    main{max-width:1200px;margin:0 auto;padding:32px 20px 60px;}
 
-    .logo-mark {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 800; color: #fff;
-      flex-shrink: 0;
-    }
+    /* Program tabs */
+    .tabs-wrapper{overflow-x:auto;margin-bottom:24px;}
+    .tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:6px;width:fit-content;min-width:100%;}
+    .tab{padding:10px 22px;border:none;background:transparent;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;transition:.2s;white-space:nowrap;}
+    .tab:hover{background:var(--bg);color:var(--text);}
+    .tab.active{background:var(--blue);color:#fff;font-weight:700;}
 
-    .header-text h1 {
-      font-size: 20px; font-weight: 700;
-      color: #fff; letter-spacing: -0.3px;
-    }
-    .header-text p {
-      font-size: 13px; color: var(--cyan); margin-top: 2px;
-    }
+    /* Panel top controls */
+    .panel-top{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:20px;}
+    .legend{display:flex;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;}
+    .legend-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+    .legend-dot{width:12px;height:12px;border-radius:4px;flex-shrink:0;}
 
-    .header-admin-link {
-      margin-right: auto;
-      color: rgba(255,255,255,0.4);
-      text-decoration: none;
-      font-size: 12px;
-      transition: color 0.2s;
-    }
-    .header-admin-link:hover { color: rgba(255,255,255,0.7); }
+    .panel-controls{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 
-    /* ── Loading ── */
-    #loading {
-      display: flex; align-items: center; justify-content: center;
-      min-height: 300px;
-      flex-direction: column; gap: 12px;
-    }
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Year switcher */
+    .yr-switcher{display:flex;background:var(--card);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;}
+    .yr-btn{padding:9px 18px;border:none;background:transparent;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;transition:.2s;}
+    .yr-btn:hover{background:var(--bg);}
+    .yr-btn.active{background:var(--blue);color:#fff;}
 
-    /* ── Main ── */
-    main { max-width: 1200px; margin: 0 auto; padding: 32px 20px 60px; }
+    /* PDF button */
+    .pdf-btn{padding:9px 18px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:.2s;white-space:nowrap;}
+    .pdf-btn:hover{background:#002266;}
+    .pdf-btn:disabled{opacity:.6;cursor:not-allowed;}
 
-    /* ── Tabs ── */
-    .tabs-wrapper { overflow-x: auto; margin-bottom: 28px; }
-    .tabs {
-      display: flex; gap: 8px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 6px;
-      width: fit-content;
-      min-width: 100%;
-    }
+    /* Calendar grid */
+    .year-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+    .month-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;transition:box-shadow .2s;}
+    .month-card:hover{box-shadow:0 4px 20px rgba(13,64,252,.08);}
+    .month-name{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;text-align:center;}
+    .days-header{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+    .days-header span{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px 0;}
+    .days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+    .day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;border-radius:7px;color:var(--text);transition:transform .1s;cursor:default;}
+    .day:hover{transform:scale(1.15);z-index:1;position:relative;}
+    .day.study  {background:#ddeeff;color:#0D40FC;}
+    .day.exam   {background:#FF6B35;color:#fff;font-weight:700;}
+    .day.break  {background:#A8E6CF;color:#1a5c3a;}
+    .day.holiday{background:#FFD93D;color:#7a4f00;}
+    .day.obm    {background:#0D40FC;color:#fff;font-weight:700;}
+    .day.today  {box-shadow:0 0 0 2px var(--blue);font-weight:700;}
 
-    .tab {
-      padding: 10px 22px;
-      border: none; background: transparent;
-      border-radius: 10px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 14px; font-weight: 500;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-    .tab:hover { background: var(--bg); color: var(--text); }
-    .tab.active {
-      background: var(--blue); color: #fff;
-      font-weight: 700;
-    }
+    /* Notes */
+    .notes-box{margin-top:20px;background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:14px 18px;font-size:13px;color:#6d4c00;}
+    .notes-label{font-weight:700;margin-left:6px;}
 
-    /* ── Tab Panel ── */
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; animation: fadeIn 0.25s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    /* Empty */
+    .empty-state{text-align:center;padding:80px 20px;}
+    .empty-icon{font-size:52px;margin-bottom:16px;}
+    .empty-state p{font-size:17px;font-weight:600;color:var(--text);}
+    .empty-sub{font-size:14px!important;font-weight:400!important;color:var(--muted)!important;margin-top:6px;}
 
-    /* ── Legend ── */
-    .legend {
-      display: flex; flex-wrap: wrap; gap: 14px;
-      margin-bottom: 24px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 20px;
-    }
-    .legend-item {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--muted);
-    }
-    .legend-dot {
-      width: 12px; height: 12px;
-      border-radius: 4px; flex-shrink: 0;
-    }
+    /* Footer */
+    footer{text-align:center;padding:20px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);}
 
-    /* ── Year Grid ── */
-    .year-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-    }
-
-    /* ── Month Card ── */
-    .month-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 18px 16px 16px;
-      transition: box-shadow 0.2s;
-    }
-    .month-card:hover { box-shadow: 0 4px 20px rgba(13,64,252,0.08); }
-
-    .month-name {
-      font-size: 15px; font-weight: 700;
-      color: var(--navy);
-      margin-bottom: 14px;
-      text-align: center;
-    }
-
-    .days-header {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      margin-bottom: 6px;
-    }
-    .days-header span {
-      text-align: center;
-      font-size: 11px; font-weight: 600;
-      color: var(--muted);
-      padding: 4px 0;
-    }
-
-    .days-grid {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      gap: 2px;
-    }
-
-    .day {
-      aspect-ratio: 1;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 500;
-      border-radius: 8px;
-      color: var(--text);
-      transition: transform 0.15s;
-      cursor: default;
-    }
-    .day:hover { transform: scale(1.15); z-index: 1; position: relative; }
-
-    /* Event types */
-    .day.start   { background: #0D40FC; color: #fff; font-weight: 700; }
-    .day.study   { background: #ddeeff; color: #0D40FC; }
-    .day.exam    { background: #FF6B35; color: #fff; font-weight: 700; }
-    .day.break   { background: #A8E6CF; color: #2d6a4f; }
-    .day.holiday { background: #FFD93D; color: #7a5900; }
-    .day.lecture { background: #0D40FC; color: #fff; font-weight: 700; }
-    .day.project { background: #55D7FF; color: #001442; }
-    .day.unit_exam { background: #FF6B35; color: #fff; }
-    .day.final_exam { background: #A8E6CF; color: #2d6a4f; }
-    .day.haj_holiday { background: #FFD93D; color: #7a5900; }
-    .day.obm    { background: #0D40FC; color: #fff; font-weight: 700; }
-    .day.group  { background: #0D40FC; color: #fff; }
-    .day.residence { background: #FF6B35; color: #fff; }
-
-    .day.today {
-      box-shadow: 0 0 0 2px var(--blue);
-      font-weight: 700;
-    }
-
-    /* ── Notes ── */
-    .notes-box {
-      margin-top: 20px;
-      background: #fff8e1;
-      border: 1px solid #ffe082;
-      border-radius: 12px;
-      padding: 14px 18px;
-      font-size: 13px;
-      color: #6d4c00;
-    }
-    .notes-label { font-weight: 700; margin-left: 6px; }
-
-    /* ── Empty State ── */
-    .empty-state {
-      text-align: center;
-      padding: 80px 20px;
-      color: var(--muted);
-    }
-    .empty-icon { font-size: 52px; margin-bottom: 16px; }
-    .empty-state p { font-size: 17px; font-weight: 600; color: var(--text); }
-    .empty-sub { font-size: 14px !important; font-weight: 400 !important; color: var(--muted) !important; margin-top: 6px; }
-
-    /* ── Footer ── */
-    footer {
-      text-align: center;
-      padding: 20px;
-      font-size: 12px;
-      color: var(--muted);
-      border-top: 1px solid var(--border);
-    }
-
-    @media (max-width: 600px) {
-      header { padding: 20px 16px; }
-      main { padding: 20px 12px 40px; }
-      .year-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-      .month-card { padding: 12px 10px; }
-      .month-name { font-size: 13px; }
-      .day { font-size: 10px; border-radius: 5px; }
+    @media(max-width:600px){
+      header{padding:18px 16px;}
+      main{padding:20px 12px 40px;}
+      .year-grid{grid-template-columns:1fr 1fr;gap:8px;}
+      .month-card{padding:10px 8px;}
+      .panel-top{flex-direction:column;}
+      .panel-controls{width:100%;justify-content:space-between;}
     }
   </style>
 </head>
@@ -621,7 +569,7 @@
   <div class="logo-mark">س</div>
   <div class="header-text">
     <h1>سلوكيرا — التقويم الأكاديمي</h1>
-    <p>Academic Calendar 2026</p>
+    <p>Academic Calendar 2026 / 2027</p>
   </div>
   <a href="admin.html" class="header-admin-link">⚙</a>
 </header>
@@ -634,9 +582,7 @@
   <div id="programs-container"></div>
 </main>
 
-<footer>
-  © 2026 سلوكيرا — جميع الحقوق محفوظة
-</footer>
+<footer>© 2026–2027 سلوكيرا — جميع الحقوق محفوظة</footer>
 
 </body>
 </html>
