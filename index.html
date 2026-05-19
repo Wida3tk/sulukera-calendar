@@ -340,7 +340,7 @@
     }
 
     // ═══════════════════════════════════════════
-    // PDF Export
+    // PDF Export — صفحة واحدة A4 أفقية
     // ═══════════════════════════════════════════
     window.exportPDF = async (progId) => {
       const btn  = document.querySelector(".pdf-btn");
@@ -352,7 +352,6 @@
 
       try {
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
         const fbData = firebaseData[progId] || {};
         const events = currentYear === 2026
@@ -361,74 +360,102 @@
 
         const legend = meta.legend || [];
 
-        // بناء صفحة مؤقتة للطباعة
+        // A4 landscape = 297×210mm → عند 96dpi ≈ 1122×794px
+        // نجعل printDiv عرض 1100px ثابت لضمان صفحة واحدة
         const printDiv = document.createElement("div");
-        printDiv.id    = "pdf-print-area";
         printDiv.style.cssText = `
-          position:fixed; top:-9999px; left:-9999px;
-          width:1050px; background:#fff; padding:32px;
-          font-family:'Tajawal',sans-serif; direction:rtl;
+          position:fixed;
+          top:0; left:0;
+          width:1122px;
+          min-height:794px;
+          background:#fff;
+          padding:28px 32px 24px;
+          font-family:'Tajawal',sans-serif;
+          direction:rtl;
+          box-sizing:border-box;
+          overflow:hidden;
         `;
 
-        // header
+        // ── Header ──
         printDiv.innerHTML = `
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #0D40FC;">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#0D40FC,#55D7FF);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0;">س</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #0D40FC;">
             <div>
-              <div style="font-size:18px;font-weight:800;color:#001442;">سلوكيرا — التقويم الأكاديمي ${currentYear}</div>
-              <div style="font-size:13px;color:#6b7a9a;margin-top:2px;">${name}</div>
+              <div style="font-size:20px;font-weight:800;color:#001442;margin-bottom:2px;">
+                سلوكيرا – التقويم الأكاديمي ${currentYear}
+              </div>
+              <div style="font-size:13px;color:#6b7a9a;">${name}</div>
             </div>
+            <div style="width:52px;height:52px;
+              background:linear-gradient(135deg,#0D40FC,#55D7FF);
+              border-radius:14px;display:flex;align-items:center;justify-content:center;
+              font-size:24px;font-weight:800;color:#fff;flex-shrink:0;">س</div>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
             ${legend.map(l=>`
-              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#555;">
-                <span style="width:12px;height:12px;border-radius:3px;background:${l.color};display:inline-block;"></span>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:#444;">
+                <span style="width:14px;height:14px;border-radius:4px;
+                  background:${l.color};display:inline-block;flex-shrink:0;"></span>
                 ${l.label}
               </div>`).join("")}
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">${buildPrintCalendar(events, currentYear)}</div>
-          <div style="margin-top:16px;text-align:center;font-size:10px;color:#aaa;">
+
+          <div id="pdf-months-grid"
+            style="display:grid;grid-template-columns:repeat(6,1fr);
+              grid-template-rows:repeat(2,1fr);gap:10px;flex:1;">
+            ${buildPrintCalendar(events, currentYear)}
+          </div>
+
+          <div style="margin-top:12px;text-align:center;font-size:10px;color:#bbb;">
             sulukera.com — جميع الحقوق محفوظة © ${currentYear}
           </div>`;
 
+        // إخفاء عن المستخدم أثناء التقاط
+        printDiv.style.visibility = "hidden";
         document.body.appendChild(printDiv);
+
+        // انتظر تحميل الخطوط
+        await document.fonts.ready;
+        await new Promise(r => setTimeout(r, 300));
+
+        printDiv.style.visibility = "visible";
 
         const canvas = await html2canvas(printDiv, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           backgroundColor: "#ffffff",
-          logging: false
+          logging: false,
+          width:  1122,
+          height: printDiv.scrollHeight,
+          windowWidth: 1122,
         });
 
         document.body.removeChild(printDiv);
 
-        const imgData = canvas.toDataURL("image/png");
-        const pageW   = pdf.internal.pageSize.getWidth();
-        const pageH   = pdf.internal.pageSize.getHeight();
-        const ratio   = canvas.height / canvas.width;
-        const imgH    = pageW * ratio;
+        const { jsPDF: PDF } = window.jspdf;
+        const pdf   = new PDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        const pageW = pdf.internal.pageSize.getWidth();   // 297mm
+        const pageH = pdf.internal.pageSize.getHeight();  // 210mm
 
-        if (imgH <= pageH) {
-          pdf.addImage(imgData, "PNG", 0, 0, pageW, imgH);
-        } else {
-          // صفحتين إذا طال
-          const half   = canvas.height / 2;
-          const c1     = document.createElement("canvas");
-          c1.width     = canvas.width; c1.height = half;
-          c1.getContext("2d").drawImage(canvas, 0, 0, canvas.width, half, 0, 0, canvas.width, half);
-          const c2     = document.createElement("canvas");
-          c2.width     = canvas.width; c2.height = half;
-          c2.getContext("2d").drawImage(canvas, 0, half, canvas.width, half, 0, 0, canvas.width, half);
-          pdf.addImage(c1.toDataURL("image/png"), "PNG", 0, 0, pageW, pageH);
-          pdf.addPage();
-          pdf.addImage(c2.toDataURL("image/png"), "PNG", 0, 0, pageW, pageH);
-        }
+        // ضغط الصورة لتناسب الصفحة بدون قطع
+        const imgW   = canvas.width;
+        const imgH   = canvas.height;
+        const scale  = Math.min(pageW / (imgW / 2), pageH / (imgH / 2));
+        const finalW = (imgW / 2) * scale;
+        const finalH = (imgH / 2) * scale;
+        const offX   = (pageW - finalW) / 2;
+        const offY   = (pageH - finalH) / 2;
+
+        pdf.addImage(canvas.toDataURL("image/png","1.0"), "PNG",
+          offX, offY, finalW, finalH);
 
         pdf.save(`sulukera-${progId}-${currentYear}.pdf`);
 
       } catch (e) {
         console.error(e);
-        alert("حدث خطأ أثناء التصدير، حاولي مجدداً");
+        alert("حدث خطأ أثناء التصدير: " + e.message);
       }
 
       btn.disabled = false;
@@ -436,37 +463,61 @@
     };
 
     function buildPrintCalendar(events, yr) {
-      const DAYS_PRINT = ["ح","ن","ث","ر","خ","ج","س"];
+      // الأشهر بالترتيب الصحيح: يناير → ديسمبر (من اليمين لليسار في grid)
+      // grid-template-columns: repeat(6,1fr) → صفان × ٦ أعمدة = ١٢ شهر
+      const TYPE_COLORS = {
+        study:   "#ddeeff",
+        exam:    "#FF6B35",
+        break:   "#A8E6CF",
+        holiday: "#FFD93D",
+        obm:     "#0D40FC",
+      };
+      const TYPE_TEXT = {
+        study: "#0D40FC", exam: "#fff", break: "#1a5c3a",
+        holiday: "#7a4f00", obm: "#fff",
+      };
+
       let html = "";
-      for (let m=0; m<12; m++) {
+      for (let m = 0; m < 12; m++) {
         const fd  = new Date(yr, m, 1).getDay();
         const dim = new Date(yr, m+1, 0).getDate();
-        const TYPE_COLORS = {
-          study:   "#ddeeff", exam: "#FF6B35", break: "#A8E6CF",
-          holiday: "#FFD93D", obm:  "#0D40FC"
-        };
-        const TYPE_TEXT = {
-          study: "#0D40FC", exam: "#fff", break: "#1a5c3a",
-          holiday: "#7a4f00", obm: "#fff"
-        };
 
-        html += `<div style="background:#f8faff;border:1px solid #e0e8ff;border-radius:10px;padding:10px;">
-          <div style="font-size:12px;font-weight:700;color:#001442;text-align:center;margin-bottom:8px;">${MONTHS_AR[m]}</div>
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:3px;">`;
-        DAYS_PRINT.forEach(d => {
-          html += `<span style="text-align:center;font-size:9px;font-weight:600;color:#9aa;padding:2px 0;">${d}</span>`;
-        });
-        html += `</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">`;
-        for (let i=0; i<fd; i++) html += `<span></span>`;
-        for (let d=1; d<=dim; d++) {
-          const ds   = `${yr}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-          const type = events[ds] || "";
-          const bg   = TYPE_COLORS[type] || "transparent";
-          const tc   = TYPE_TEXT[type]   || "#333";
-          html += `<span style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
-            font-size:9px;border-radius:4px;background:${bg};color:${tc};font-weight:${type?"600":"400"};">${d}</span>`;
-        }
-        html += `</div></div>`;
+        // حجم الخلية: عرض الشهر ≈ (1122-64-50)/6 ≈ 168px
+        // ارتفاع الشهر للصف الواحد: max 6 أسابيع × 22px + header
+        html += `
+        <div style="background:#f8faff;border:1px solid #dde5ff;border-radius:10px;
+          padding:8px 6px;display:flex;flex-direction:column;">
+          <div style="font-size:13px;font-weight:700;color:#001442;
+            text-align:center;margin-bottom:6px;">${MONTHS_AR[m]}</div>
+
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:2px;">
+            ${["ح","ن","ث","ر","خ","ج","س"].map(d=>
+              `<span style="text-align:center;font-size:9px;font-weight:700;
+                color:#8899bb;padding:1px 0;">${d}</span>`
+            ).join("")}
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;flex:1;">
+            ${Array(fd).fill(`<span></span>`).join("")}
+            ${Array.from({length:dim},(_,i)=>{
+              const d    = i+1;
+              const ds   = `${yr}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+              const type = events[ds] || "";
+              const bg   = TYPE_COLORS[type] || "transparent";
+              const tc   = TYPE_TEXT[type]   || "#222";
+              const fw   = type ? "700" : "400";
+              return `<span style="
+                display:flex;align-items:center;justify-content:center;
+                aspect-ratio:1;font-size:10px;font-weight:${fw};
+                border-radius:5px;
+                background-color:${bg};
+                color:${tc};
+                -webkit-print-color-adjust:exact;
+                print-color-adjust:exact;
+              ">${d}</span>`;
+            }).join("")}
+          </div>
+        </div>`;
       }
       return html;
     }
