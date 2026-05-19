@@ -130,7 +130,10 @@
             <span class="evt-count">${cnt} يوم محدد</span>
           </div>
           <div class="prog-actions">
-            <button class="edit-btn" onclick="openEditor('${p.id}')">✏️ تعديل التقويم</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="edit-btn" onclick="openEditor('${p.id}',2026)">✏️ تعديل 2026</button>
+              <button class="edit-btn edit-btn-27" onclick="openEditor('${p.id}',2027)">✏️ تعديل 2027</button>
+            </div>
             <div class="notes-row">
               <input class="notes-input" id="notes-${p.id}" type="text"
                 placeholder="ملاحظة للطلاب..."
@@ -157,12 +160,18 @@
     // ═══════════════════════════════════════
     // EDITOR
     // ═══════════════════════════════════════
-    window.openEditor = progId => {
-      currentProgram = progId;
+    let currentEditorYear = 2026;
+
+    window.openEditor = (progId, yr) => {
+      currentProgram    = progId;
+      currentEditorYear = yr || 2026;
       const s = allData[progId]||{};
-      currentEvents  = JSON.parse(JSON.stringify(s.events||{}));
+      // 2026 من Firebase مباشرة (events)، 2027 من (events_2027)
+      const key = currentEditorYear === 2027 ? "events_2027" : "events";
+      currentEvents = JSON.parse(JSON.stringify(s[key]||{}));
       const p = ALL_PROGRAMS.find(x => x.id===progId);
-      document.getElementById("editor-title").textContent = `تعديل: ${p.nameAr}`;
+      document.getElementById("editor-title").textContent =
+        `تعديل: ${p.nameAr} — ${currentEditorYear}`;
       document.getElementById("editor-overlay").style.display = "flex";
       buildPalette();
       buildCalendar();
@@ -202,7 +211,7 @@
         html += `</div><div class="ecal-grid">`;
         for(let i=0;i<fd;i++) html+=`<span></span>`;
         for(let d=1;d<=dim;d++){
-          const ds = `2026-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const ds = `${currentEditorYear}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
           const t  = currentEvents[ds]||"";
           const ti = DAY_TYPES.find(x=>x.id===t);
           html += `<span class="eday ${t}" data-date="${ds}" title="${ti?ti.label:"عادي"}"
@@ -266,7 +275,8 @@
       const btn = document.getElementById("save-btn");
       btn.disabled=true; btn.textContent="جاري الحفظ...";
       try {
-        await setDoc(doc(db,"calendars",currentProgram),{events:currentEvents},{merge:true});
+        const saveKey = currentEditorYear === 2027 ? "events_2027" : "events";
+        await setDoc(doc(db,"calendars",currentProgram),{[saveKey]:currentEvents},{merge:true});
         showToast("✓ تم حفظ التقويم بنجاح");
         btn.textContent="✓ محفوظ";
         setTimeout(()=>{ btn.disabled=false; btn.textContent="حفظ التغييرات"; },2000);
@@ -366,7 +376,8 @@
     .evt-count{font-size:12px;color:var(--muted);}
     .prog-actions{display:flex;flex-direction:column;gap:10px;}
     .edit-btn{padding:10px 18px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:var(--blue);cursor:pointer;transition:.2s;align-self:flex-start;}
-    .edit-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .edit-btn-27{background:var(--bg);color:#7c3aed;border-color:#ddd6fe;}
+    .edit-btn-27:hover{background:#7c3aed;color:#fff;border-color:#7c3aed;}
     .notes-row{display:flex;gap:8px;}
     .notes-input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:.2s;background:var(--bg);}
     .notes-input:focus{border-color:var(--blue);background:#fff;}
