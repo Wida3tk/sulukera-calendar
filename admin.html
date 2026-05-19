@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — سلوكيرا</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCJG0sOcs0Wr6QslTUKmDshs9LapFyjs1w",
@@ -21,567 +22,443 @@
       appId: "1:729863935633:web:c3069e853fa11e4d4b9130"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const app  = initializeApp(firebaseConfig);
+    const db   = getFirestore(app);
     const auth = getAuth(app);
 
-    // قائمة البرامج الثابتة
     const ALL_PROGRAMS = [
-      { id: "ABA",      nameAr: "برنامج ABA",         nameEn: "ABA Program" },
-      { id: "ABA_MAY",  nameAr: "ABA — دفعة مايو",     nameEn: "ABA May Batch" },
-      { id: "BATCH_11", nameAr: "دفعة 11",             nameEn: "Batch 11" },
-      { id: "BATCH_10", nameAr: "دفعة 10",             nameEn: "Batch 10" },
-      { id: "OBM",      nameAr: "OBM-P Live",          nameEn: "OBM-P Live" },
-      { id: "BE",       nameAr: "برنامج BE",            nameEn: "BE Program" },
-      { id: "ABAT",     nameAr: "ABAT Live",           nameEn: "ABAT Live" },
-      { id: "OBM_EC",   nameAr: "OBM E&C",             nameEn: "OBM E&C" },
+      { id: "ABA",      nameAr: "برنامج ABA" },
+      { id: "ABA_MAY",  nameAr: "ABA — دفعة مايو" },
+      { id: "BATCH_11", nameAr: "دفعة 11" },
+      { id: "BATCH_10", nameAr: "دفعة 10" },
+      { id: "OBM",      nameAr: "OBM-P Live" },
+      { id: "BE",       nameAr: "برنامج BE" },
+      { id: "ABAT",     nameAr: "ABAT Live" },
+      { id: "OBM_EC",   nameAr: "OBM E&C" },
     ];
 
-    // ══════════════════════════════════════
-    // Auth State
-    // ══════════════════════════════════════
-    onAuthStateChanged(auth, (user) => {
+    const DAY_TYPES = [
+      { id: "",        label: "مسح",                color: "#e8ecf4",  textColor: "#6b7a9a" },
+      { id: "study",   label: "أسبوع دراسي",        color: "#ddeeff",  textColor: "#0D40FC" },
+      { id: "exam",    label: "أسبوع الاختبارات",   color: "#FF6B35",  textColor: "#fff"    },
+      { id: "break",   label: "إجازة نهاية الفصل",  color: "#A8E6CF",  textColor: "#1a5c3a" },
+      { id: "holiday", label: "إجازة رسمية",         color: "#FFD93D",  textColor: "#7a4f00" },
+      { id: "obm",     label: "جلسة مباشرة",        color: "#0D40FC",  textColor: "#fff"    },
+    ];
+
+    const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو",
+                       "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const DAYS_AR   = ["ح","ن","ث","ر","خ","ج","س"];
+
+    let currentProgram  = null;
+    let currentEvents   = {};
+    let selectedType    = "study";
+    let allData         = {};
+    let isDragging      = false;
+
+    // ═══════════════════════════════════════
+    // Auth
+    // ═══════════════════════════════════════
+    onAuthStateChanged(auth, user => {
       if (user) {
         document.getElementById("login-screen").style.display = "none";
-        document.getElementById("dashboard").style.display = "block";
-        document.getElementById("user-email").textContent = user.email;
+        document.getElementById("dashboard").style.display   = "block";
+        document.getElementById("user-email").textContent    = user.email;
         loadDashboard();
       } else {
         document.getElementById("login-screen").style.display = "flex";
-        document.getElementById("dashboard").style.display = "none";
+        document.getElementById("dashboard").style.display   = "none";
       }
     });
 
-    // ══════════════════════════════════════
-    // Login
-    // ══════════════════════════════════════
     window.doLogin = async () => {
       const email = document.getElementById("email").value.trim();
       const pass  = document.getElementById("password").value;
       const btn   = document.getElementById("login-btn");
       const err   = document.getElementById("login-error");
-
-      err.textContent = "";
-      btn.disabled = true;
-      btn.textContent = "جاري الدخول...";
-
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-      } catch (e) {
-        err.textContent = "البريد الإلكتروني أو كلمة السر غير صحيحة";
-        btn.disabled = false;
-        btn.textContent = "دخول";
-      }
+      err.textContent = ""; btn.disabled = true; btn.textContent = "جاري الدخول...";
+      try { await signInWithEmailAndPassword(auth, email, pass); }
+      catch { err.textContent = "البريد أو كلمة السر غير صحيحة"; btn.disabled=false; btn.textContent="دخول"; }
     };
-
-    window.doLogout = async () => {
-      await signOut(auth);
-    };
-
-    // Enter key on password
-    window.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("password")?.addEventListener("keydown", e => {
-        if (e.key === "Enter") window.doLogin();
-      });
+    window.doLogout = () => signOut(auth);
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("password")?.addEventListener("keydown", e => { if(e.key==="Enter") window.doLogin(); });
     });
 
-    // ══════════════════════════════════════
+    // ═══════════════════════════════════════
     // Dashboard
-    // ══════════════════════════════════════
+    // ═══════════════════════════════════════
     async function loadDashboard() {
-      const grid = document.getElementById("programs-grid");
-      grid.innerHTML = `<div class="loading-dash"><div class="spinner"></div></div>`;
-
-      // Initialize missing programs
-      for (const prog of ALL_PROGRAMS) {
-        const ref = doc(db, "calendars", prog.id);
+      for (const p of ALL_PROGRAMS) {
+        const ref = doc(db,"calendars",p.id);
         const snap = await getDoc(ref);
-        if (!snap.exists()) {
-          await setDoc(ref, { visible: false, nameAr: prog.nameAr, notes: "" });
-        }
+        if (!snap.exists()) await setDoc(ref,{visible:false,nameAr:p.nameAr,notes:"",events:{}});
       }
-
-      // Listen real-time
-      onSnapshot(collection(db, "calendars"), (snapshot) => {
-        const data = {};
-        snapshot.forEach(d => { data[d.id] = d.data(); });
-        renderGrid(data);
+      onSnapshot(collection(db,"calendars"), snap => {
+        allData = {};
+        snap.forEach(d => { allData[d.id] = d.data(); });
+        renderList();
       });
     }
 
-    function renderGrid(data) {
-      const grid = document.getElementById("programs-grid");
-
-      // Stats
+    function renderList() {
+      const grid    = document.getElementById("programs-grid");
       const total   = ALL_PROGRAMS.length;
-      const visible = ALL_PROGRAMS.filter(p => data[p.id]?.visible).length;
+      const visible = ALL_PROGRAMS.filter(p => allData[p.id]?.visible).length;
       document.getElementById("stat-total").textContent   = total;
       document.getElementById("stat-visible").textContent = visible;
       document.getElementById("stat-hidden").textContent  = total - visible;
 
-      let html = "";
-      for (const prog of ALL_PROGRAMS) {
-        const state = data[prog.id] || { visible: false, notes: "" };
-        const isOn  = state.visible;
-        const notes = state.notes || "";
-
-        html += `
-        <div class="prog-card ${isOn ? 'on' : 'off'}">
+      grid.innerHTML = ALL_PROGRAMS.map(p => {
+        const s    = allData[p.id] || {visible:false,notes:"",events:{}};
+        const isOn = s.visible;
+        const cnt  = Object.keys(s.events||{}).length;
+        return `
+        <div class="prog-card ${isOn?"on":"off"}">
           <div class="prog-header">
             <div class="prog-info">
-              <span class="prog-badge">${prog.id}</span>
-              <h3 class="prog-name">${prog.nameAr}</h3>
+              <span class="prog-badge">${p.id}</span>
+              <h3 class="prog-name">${p.nameAr}</h3>
             </div>
-            <button class="toggle-btn ${isOn ? 'active' : ''}"
-              onclick="toggleProgram('${prog.id}', ${!isOn})">
-              <span class="toggle-track">
-                <span class="toggle-thumb"></span>
-              </span>
-              <span class="toggle-label">${isOn ? 'ظاهر' : 'مخفي'}</span>
+            <button class="toggle-btn ${isOn?"active":""}" onclick="toggleProg('${p.id}',${!isOn})">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">${isOn?"ظاهر":"مخفي"}</span>
             </button>
           </div>
-          <div class="prog-status ${isOn ? 'status-on' : 'status-off'}">
-            ${isOn ? '✓ يظهر للطلاب الآن' : '✗ مخفي عن الطلاب'}
+          <div class="prog-meta">
+            <span class="prog-status ${isOn?"s-on":"s-off"}">${isOn?"✓ يظهر للطلاب":"✗ مخفي"}</span>
+            <span class="evt-count">${cnt} يوم محدد</span>
           </div>
-          <div class="notes-row">
-            <input
-              class="notes-input"
-              id="notes-${prog.id}"
-              type="text"
-              placeholder="ملاحظة تظهر أسفل التقويم (اختياري)..."
-              value="${notes}"
-              onblur="saveNotes('${prog.id}')"
-              onkeydown="if(event.key==='Enter') saveNotes('${prog.id}')"
-            />
-            <button class="save-note-btn" onclick="saveNotes('${prog.id}')">حفظ</button>
+          <div class="prog-actions">
+            <button class="edit-btn" onclick="openEditor('${p.id}')">✏️ تعديل التقويم</button>
+            <div class="notes-row">
+              <input class="notes-input" id="notes-${p.id}" type="text"
+                placeholder="ملاحظة للطلاب..."
+                value="${(s.notes||"").replace(/"/g,"&quot;")}"
+                onblur="saveNote('${p.id}')"
+                onkeydown="if(event.key==='Enter') saveNote('${p.id}')" />
+              <button class="save-note-btn" onclick="saveNote('${p.id}')">حفظ</button>
+            </div>
           </div>
         </div>`;
-      }
-
-      grid.innerHTML = html;
+      }).join("");
     }
 
-    window.toggleProgram = async (id, newState) => {
+    window.toggleProg = async (id,val) => {
+      await setDoc(doc(db,"calendars",id),{visible:val},{merge:true});
+      showToast(val?"✓ البرنامج ظاهر للطلاب":"✗ تم إخفاء البرنامج");
+    };
+    window.saveNote = async id => {
+      const v = document.getElementById(`notes-${id}`)?.value||"";
+      await setDoc(doc(db,"calendars",id),{notes:v},{merge:true});
+      showToast("✓ تم حفظ الملاحظة");
+    };
+
+    // ═══════════════════════════════════════
+    // EDITOR
+    // ═══════════════════════════════════════
+    window.openEditor = progId => {
+      currentProgram = progId;
+      const s = allData[progId]||{};
+      currentEvents  = JSON.parse(JSON.stringify(s.events||{}));
+      const p = ALL_PROGRAMS.find(x => x.id===progId);
+      document.getElementById("editor-title").textContent = `تعديل: ${p.nameAr}`;
+      document.getElementById("editor-overlay").style.display = "flex";
+      buildPalette();
+      buildCalendar();
+      updateStats();
+    };
+
+    window.closeEditor = () => {
+      document.getElementById("editor-overlay").style.display = "none";
+      currentProgram = null; currentEvents = {};
+    };
+
+    function buildPalette() {
+      document.getElementById("type-palette").innerHTML = DAY_TYPES.map(t => `
+        <button class="pal-btn ${t.id===selectedType?"active":""}"
+          data-type="${t.id}"
+          style="--c:${t.color};--tc:${t.textColor}"
+          onclick="pickType('${t.id}')">
+          <span class="pal-dot"></span>${t.label}
+        </button>`).join("");
+    }
+
+    window.pickType = id => {
+      selectedType = id;
+      document.querySelectorAll(".pal-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.type===id));
+    };
+
+    function buildCalendar() {
+      let html = "";
+      for (let m=0; m<12; m++) {
+        const fd  = new Date(2026,m,1).getDay();
+        const dim = new Date(2026,m+1,0).getDate();
+        html += `<div class="ecal-month">
+          <div class="ecal-hdr">${MONTHS_AR[m]}</div>
+          <div class="ecal-dow">`;
+        DAYS_AR.forEach(d => { html += `<span>${d}</span>`; });
+        html += `</div><div class="ecal-grid">`;
+        for(let i=0;i<fd;i++) html+=`<span></span>`;
+        for(let d=1;d<=dim;d++){
+          const ds = `2026-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const t  = currentEvents[ds]||"";
+          const ti = DAY_TYPES.find(x=>x.id===t);
+          html += `<span class="eday ${t}" data-date="${ds}" title="${ti?ti.label:"عادي"}"
+            onmousedown="startPaint('${ds}')"
+            onmouseenter="dragPaint('${ds}')"
+            ontouchstart="startPaint('${ds}')">${d}</span>`;
+        }
+        html += `</div></div>`;
+      }
+      document.getElementById("editor-cal").innerHTML = html;
+
+      // stop drag on mouseup anywhere
+      document.getElementById("editor-cal").addEventListener("mouseup", () => { isDragging=false; });
+    }
+
+    // paint on click + drag
+    window.startPaint = ds => {
+      isDragging = true;
+      paintDay(ds);
+    };
+    window.dragPaint = ds => {
+      if (isDragging) paintDay(ds);
+    };
+    document.addEventListener("mouseup", () => { isDragging=false; });
+
+    function paintDay(ds) {
+      const current = currentEvents[ds];
+      if (selectedType === "") {
+        delete currentEvents[ds];
+      } else if (current === selectedType) {
+        // نفس اللون → مسح
+        delete currentEvents[ds];
+      } else {
+        currentEvents[ds] = selectedType;
+      }
+      // تحديث الخلية مباشرة
+      const cell = document.querySelector(`[data-date="${ds}"]`);
+      if (cell) {
+        const t = currentEvents[ds]||"";
+        cell.className = `eday ${t}`;
+        const ti = DAY_TYPES.find(x=>x.id===t);
+        cell.title = ti?ti.label:"عادي";
+      }
+      updateStats();
+    }
+
+    function updateStats() {
+      const counts = {};
+      DAY_TYPES.forEach(t => { if(t.id) counts[t.id]=0; });
+      Object.values(currentEvents).forEach(t => { if(counts[t]!==undefined) counts[t]++; });
+      document.getElementById("editor-stats").innerHTML =
+        DAY_TYPES.filter(t=>t.id).map(t =>
+          `<span class="schip" style="background:${t.color};color:${t.textColor}">
+            ${t.label}: <b>${counts[t.id]||0}</b>
+          </span>`
+        ).join("");
+    }
+
+    window.saveEditor = async () => {
+      if (!currentProgram) return;
+      const btn = document.getElementById("save-btn");
+      btn.disabled=true; btn.textContent="جاري الحفظ...";
       try {
-        await setDoc(doc(db, "calendars", id), { visible: newState }, { merge: true });
-        showToast(newState ? `✓ تم إظهار البرنامج للطلاب` : `✗ تم إخفاء البرنامج`);
-      } catch (e) {
-        showToast("حدث خطأ، حاولي مجدداً", "error");
+        await setDoc(doc(db,"calendars",currentProgram),{events:currentEvents},{merge:true});
+        showToast("✓ تم حفظ التقويم بنجاح");
+        btn.textContent="✓ محفوظ";
+        setTimeout(()=>{ btn.disabled=false; btn.textContent="حفظ التغييرات"; },2000);
+      } catch {
+        showToast("خطأ في الحفظ","error");
+        btn.disabled=false; btn.textContent="حفظ التغييرات";
       }
     };
 
-    window.saveNotes = async (id) => {
-      const val = document.getElementById(`notes-${id}`)?.value || "";
-      try {
-        await setDoc(doc(db, "calendars", id), { notes: val }, { merge: true });
-        showToast("تم حفظ الملاحظة");
-      } catch (e) {
-        showToast("خطأ في الحفظ", "error");
-      }
+    window.clearEditor = () => {
+      if (!confirm("هل تريدين مسح جميع الأيام المحددة؟")) return;
+      currentEvents = {};
+      buildCalendar();
+      updateStats();
+      showToast("تم مسح كل الأيام — لا تنسي الحفظ");
     };
 
-    // ══════════════════════════════════════
+    // ═══════════════════════════════════════
     // Toast
-    // ══════════════════════════════════════
-    window.showToast = (msg, type = "success") => {
+    // ═══════════════════════════════════════
+    window.showToast = (msg, type="success") => {
       const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.className = "toast show " + type;
-      setTimeout(() => t.classList.remove("show"), 3000);
+      t.textContent=msg; t.className=`toast show ${type}`;
+      setTimeout(()=>t.classList.remove("show"),3000);
     };
   </script>
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --blue: #0D40FC;
-      --cyan: #55D7FF;
-      --navy: #001442;
-      --white: #ffffff;
-      --bg: #f4f7ff;
-      --card: #ffffff;
-      --text: #0a1628;
-      --muted: #6b7a9a;
-      --border: #e0e8ff;
-      --green: #00c851;
-      --red: #ff4444;
-      --radius: 16px;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#0D40FC;--cyan:#55D7FF;--navy:#001442;
+      --bg:#f4f7ff;--card:#fff;--text:#0a1628;
+      --muted:#6b7a9a;--border:#e0e8ff;--green:#00c851;--r:16px;
     }
+    body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;direction:rtl;}
 
-    body {
-      font-family: 'Tajawal', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      direction: rtl;
-    }
+    /* Login */
+    #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy);}
+    .login-box{background:var(--card);border-radius:24px;padding:48px 40px;width:100%;max-width:400px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    .login-logo{width:60px;height:60px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;margin:0 auto 20px;}
+    .login-box h2{font-size:22px;font-weight:700;margin-bottom:4px;}
+    .login-box>p{font-size:14px;color:var(--muted);margin-bottom:32px;}
+    .field{margin-bottom:14px;text-align:right;}
+    .field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+    .field input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:.2s;direction:ltr;text-align:left;}
+    .field input:focus{border-color:var(--blue);}
+    .login-btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;transition:.2s;}
+    .login-btn:hover{background:#0a35d4;}
+    .login-btn:disabled{opacity:.6;cursor:not-allowed;}
+    .login-error{margin-top:12px;font-size:13px;color:#f44;min-height:18px;}
 
-    /* ══ Login Screen ══ */
-    #login-screen {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--navy);
-    }
+    /* Dashboard */
+    #dashboard{display:none;}
+    header{background:var(--navy);padding:20px 32px;display:flex;align-items:center;gap:14px;}
+    .logo-mark{width:40px;height:40px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;}
+    .header-text h1{font-size:17px;font-weight:700;color:#fff;}
+    .header-text p{font-size:12px;color:var(--cyan);margin-top:1px;}
+    .header-actions{margin-right:auto;display:flex;align-items:center;gap:12px;}
+    #user-email{font-size:12px;color:rgba(255,255,255,.5);}
+    .view-btn{padding:8px 16px;background:rgba(85,215,255,.15);color:var(--cyan);border:1px solid rgba(85,215,255,.3);border-radius:8px;font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;text-decoration:none;transition:.2s;}
+    .view-btn:hover{background:rgba(85,215,255,.25);}
+    .logout-btn{padding:8px 16px;background:transparent;color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.15);border-radius:8px;font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;transition:.2s;}
+    .logout-btn:hover{color:#fff;}
 
-    .login-box {
-      background: var(--card);
-      border-radius: 24px;
-      padding: 48px 40px;
-      width: 100%;
-      max-width: 400px;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
+    .stats-bar{background:var(--card);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;gap:32px;}
+    .stat{display:flex;align-items:center;gap:10px;}
+    .stat-num{font-size:24px;font-weight:800;color:var(--blue);}
+    .stat-label{font-size:13px;color:var(--muted);}
+    .stat.g .stat-num{color:var(--green);}
 
-    .login-logo {
-      width: 60px; height: 60px;
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      border-radius: 18px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; font-weight: 800; color: #fff;
-      margin: 0 auto 20px;
-    }
+    main{max-width:900px;margin:0 auto;padding:32px 20px 80px;}
+    .sec-title{font-size:18px;font-weight:700;margin-bottom:20px;color:var(--navy);}
 
-    .login-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-    .login-box p  { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+    #programs-grid{display:grid;gap:14px;}
+    .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:60px auto;}
+    @keyframes spin{to{transform:rotate(360deg);}}
 
-    .field {
-      margin-bottom: 14px;
-      text-align: right;
-    }
-    .field label {
-      display: block;
-      font-size: 13px; font-weight: 600;
-      color: var(--muted); margin-bottom: 6px;
-    }
-    .field input {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-      direction: ltr; text-align: left;
-    }
-    .field input:focus { border-color: var(--blue); }
+    .prog-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:20px 22px;transition:.2s;}
+    .prog-card.on{border-color:rgba(13,64,252,.25);box-shadow:0 2px 12px rgba(13,64,252,.07);}
+    .prog-card.off{opacity:.8;}
+    .prog-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);opacity:1;}
+    .prog-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .prog-info{display:flex;align-items:center;gap:10px;}
+    .prog-badge{background:var(--bg);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;direction:ltr;}
+    .prog-name{font-size:16px;font-weight:700;color:var(--navy);}
+    .toggle-btn{display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:'Tajawal',sans-serif;}
+    .toggle-track{width:48px;height:26px;background:#dde3f0;border-radius:13px;position:relative;transition:.25s;}
+    .toggle-btn.active .toggle-track{background:var(--blue);}
+    .toggle-thumb{position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;right:3px;transition:.25s;box-shadow:0 1px 4px rgba(0,0,0,.15);}
+    .toggle-btn.active .toggle-thumb{transform:translateX(-22px);}
+    .toggle-label{font-size:13px;font-weight:600;color:var(--muted);min-width:32px;}
+    .toggle-btn.active .toggle-label{color:var(--blue);}
+    .prog-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+    .prog-status{font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;}
+    .s-on{background:#e8fff1;color:#00a040;}
+    .s-off{background:#f5f5f5;color:#999;}
+    .evt-count{font-size:12px;color:var(--muted);}
+    .prog-actions{display:flex;flex-direction:column;gap:10px;}
+    .edit-btn{padding:10px 18px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:var(--blue);cursor:pointer;transition:.2s;align-self:flex-start;}
+    .edit-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .notes-row{display:flex;gap:8px;}
+    .notes-input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:.2s;background:var(--bg);}
+    .notes-input:focus{border-color:var(--blue);background:#fff;}
+    .save-note-btn{padding:9px 16px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:.2s;white-space:nowrap;}
+    .save-note-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
 
-    .login-btn {
-      width: 100%;
-      padding: 14px;
-      background: var(--blue);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 16px; font-weight: 700;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.2s, transform 0.1s;
-    }
-    .login-btn:hover   { background: #0a35d4; }
-    .login-btn:active  { transform: scale(0.98); }
-    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    /* ══ EDITOR OVERLAY ══ */
+    #editor-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,10,35,.8);backdrop-filter:blur(6px);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+    .editor-panel{background:var(--card);border-radius:24px;width:100%;max-width:1040px;box-shadow:0 30px 80px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;margin:auto;}
+    .editor-hdr{background:var(--navy);padding:18px 28px;display:flex;align-items:center;gap:16px;}
+    .editor-hdr h2{font-size:17px;font-weight:700;color:#fff;flex:1;}
+    .editor-close{width:36px;height:36px;background:rgba(255,255,255,.1);border:none;border-radius:8px;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;flex-shrink:0;}
+    .editor-close:hover{background:rgba(255,255,255,.2);}
 
-    .login-error {
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--red);
-      min-height: 18px;
-    }
+    /* Palette */
+    .pal-bar{padding:14px 24px;background:#fafbff;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+    .pal-label{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;}
+    .pal-btn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:20px;border:2px solid transparent;background:var(--bg);cursor:pointer;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:500;color:var(--text);transition:.15s;user-select:none;}
+    .pal-dot{width:10px;height:10px;border-radius:3px;background:var(--c);flex-shrink:0;}
+    .pal-btn:hover{border-color:var(--border);}
+    .pal-btn.active{border-color:var(--blue);background:#eff3ff;color:var(--blue);font-weight:700;}
 
-    /* ══ Dashboard ══ */
-    #dashboard { display: none; }
+    /* Stats */
+    .stats-chips{padding:10px 24px;background:#f8f9ff;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+    .schip{padding:4px 10px;border-radius:20px;font-size:12px;white-space:nowrap;}
 
-    header {
-      background: var(--navy);
-      padding: 20px 32px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
+    /* Tip */
+    .editor-tip{padding:10px 24px;background:#fffbea;border-bottom:1px solid #ffe082;font-size:12px;color:#7a5900;}
 
-    .logo-mark {
-      width: 40px; height: 40px;
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 800; color: #fff;
-      flex-shrink: 0;
-    }
+    /* Calendar */
+    .editor-cal-wrap{padding:20px 24px;overflow-y:auto;max-height:60vh;}
+    #editor-cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+    .ecal-month{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px;}
+    .ecal-hdr{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;text-align:center;}
+    .ecal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:3px;}
+    .ecal-dow span{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:2px 0;}
+    .ecal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+    .eday{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;border-radius:6px;cursor:pointer;color:var(--text);transition:transform .08s;user-select:none;-webkit-user-select:none;}
+    .eday:hover{transform:scale(1.2);z-index:2;position:relative;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+    .eday.study  {background:#ddeeff;color:#0D40FC;font-weight:600;}
+    .eday.exam   {background:#FF6B35;color:#fff;font-weight:700;}
+    .eday.break  {background:#A8E6CF;color:#1a5c3a;}
+    .eday.holiday{background:#FFD93D;color:#7a4f00;}
+    .eday.obm    {background:#0D40FC;color:#fff;font-weight:700;}
 
-    .header-text h1 { font-size: 17px; font-weight: 700; color: #fff; }
-    .header-text p  { font-size: 12px; color: var(--cyan); margin-top: 1px; }
+    /* Footer */
+    .editor-ftr{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;}
+    .clear-btn{padding:10px 18px;background:transparent;border:1.5px solid #ffcccc;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:#cc3333;cursor:pointer;transition:.2s;margin-left:auto;}
+    .clear-btn:hover{background:#fff5f5;}
+    .cancel-btn{padding:10px 20px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;transition:.2s;}
+    .cancel-btn:hover{color:var(--text);}
+    #save-btn{padding:10px 28px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;}
+    #save-btn:hover{background:#0a35d4;}
+    #save-btn:disabled{opacity:.6;cursor:not-allowed;}
 
-    .header-actions {
-      margin-right: auto;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    /* Toast */
+    .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;white-space:nowrap;}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    .toast.error{background:#c0392b;}
 
-    #user-email { font-size: 12px; color: rgba(255,255,255,0.5); }
-
-    .view-btn {
-      padding: 8px 16px;
-      background: rgba(85,215,255,0.15);
-      color: var(--cyan);
-      border: 1px solid rgba(85,215,255,0.3);
-      border-radius: 8px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 13px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background 0.2s;
-    }
-    .view-btn:hover { background: rgba(85,215,255,0.25); }
-
-    .logout-btn {
-      padding: 8px 16px;
-      background: transparent;
-      color: rgba(255,255,255,0.5);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .logout-btn:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
-
-    /* ══ Stats Bar ══ */
-    .stats-bar {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 32px;
-      display: flex;
-      gap: 32px;
-    }
-
-    .stat {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .stat-num {
-      font-size: 24px; font-weight: 800;
-      color: var(--blue);
-    }
-    .stat-label { font-size: 13px; color: var(--muted); }
-    .stat.green .stat-num { color: var(--green); }
-    .stat.red   .stat-num { color: var(--muted); }
-
-    /* ══ Main ══ */
-    main { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
-
-    .section-title {
-      font-size: 18px; font-weight: 700;
-      margin-bottom: 20px;
-      color: var(--navy);
-    }
-
-    /* ══ Programs Grid ══ */
-    #programs-grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .loading-dash {
-      display: flex; justify-content: center; align-items: center;
-      padding: 60px;
-    }
-    .spinner {
-      width: 36px; height: 36px;
-      border: 3px solid var(--border);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ══ Program Card ══ */
-    .prog-card {
-      background: var(--card);
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 22px;
-      transition: box-shadow 0.2s, border-color 0.2s;
-    }
-    .prog-card.on {
-      border-color: rgba(13,64,252,0.25);
-      box-shadow: 0 2px 12px rgba(13,64,252,0.07);
-    }
-    .prog-card.off { opacity: 0.75; }
-    .prog-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); opacity: 1; }
-
-    .prog-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .prog-info { display: flex; align-items: center; gap: 10px; }
-
-    .prog-badge {
-      background: var(--bg);
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 3px 8px;
-      font-size: 11px; font-weight: 600;
-      direction: ltr;
-    }
-
-    .prog-name { font-size: 16px; font-weight: 700; color: var(--navy); }
-
-    /* ══ Toggle ══ */
-    .toggle-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: none; border: none;
-      cursor: pointer;
-      font-family: 'Tajawal', sans-serif;
-    }
-
-    .toggle-track {
-      width: 48px; height: 26px;
-      background: #dde3f0;
-      border-radius: 13px;
-      position: relative;
-      transition: background 0.25s;
-    }
-    .toggle-btn.active .toggle-track { background: var(--blue); }
-
-    .toggle-thumb {
-      position: absolute;
-      width: 20px; height: 20px;
-      background: #fff;
-      border-radius: 50%;
-      top: 3px; right: 3px;
-      transition: transform 0.25s;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-    }
-    .toggle-btn.active .toggle-thumb { transform: translateX(-22px); }
-
-    .toggle-label {
-      font-size: 13px; font-weight: 600;
-      color: var(--muted);
-      min-width: 32px;
-    }
-    .toggle-btn.active .toggle-label { color: var(--blue); }
-
-    /* ══ Status ══ */
-    .prog-status {
-      font-size: 12px; font-weight: 600;
-      margin-bottom: 14px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      display: inline-block;
-    }
-    .status-on  { background: #e8fff1; color: #00a040; }
-    .status-off { background: #f5f5f5; color: #999; }
-
-    /* ══ Notes ══ */
-    .notes-row {
-      display: flex; gap: 8px;
-    }
-
-    .notes-input {
-      flex: 1;
-      padding: 9px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 13px;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.2s;
-      background: var(--bg);
-    }
-    .notes-input::placeholder { color: #bbb; }
-    .notes-input:focus { border-color: var(--blue); background: #fff; }
-
-    .save-note-btn {
-      padding: 9px 16px;
-      background: var(--bg);
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-family: 'Tajawal', sans-serif;
-      font-size: 13px; font-weight: 600;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-    .save-note-btn:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
-
-    /* ══ Toast ══ */
-    .toast {
-      position: fixed;
-      bottom: 30px; left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--navy);
-      color: #fff;
-      padding: 12px 24px;
-      border-radius: 12px;
-      font-size: 14px; font-weight: 600;
-      opacity: 0;
-      transition: all 0.3s;
-      pointer-events: none;
-      z-index: 999;
-      white-space: nowrap;
-    }
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    .toast.error { background: #c0392b; }
-
-    @media (max-width: 600px) {
-      header { padding: 16px; flex-wrap: wrap; gap: 10px; }
-      .stats-bar { padding: 12px 16px; gap: 20px; }
-      main { padding: 20px 12px 60px; }
-      .prog-card { padding: 16px; }
-      .header-actions { width: 100%; justify-content: flex-end; }
+    @media(max-width:600px){
+      header{padding:16px;flex-wrap:wrap;}
+      main{padding:20px 12px 60px;}
+      .stats-bar{padding:12px 16px;gap:16px;}
+      .header-actions{width:100%;justify-content:flex-end;}
+      #editor-cal{grid-template-columns:1fr 1fr;gap:8px;}
+      .editor-cal-wrap{max-height:55vh;padding:12px;}
+      .editor-ftr{flex-wrap:wrap;}
+      .clear-btn{margin-left:0;order:3;width:100%;}
     }
   </style>
 </head>
 <body>
 
-<!-- ══ Login ══ -->
+<!-- Login -->
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">س</div>
     <h2>لوحة تحكم الأدمن</h2>
     <p>سلوكيرا — التقويم الأكاديمي 2026</p>
-
-    <div class="field">
-      <label>البريد الإلكتروني</label>
-      <input type="email" id="email" placeholder="admin@sulukera.com" />
-    </div>
-    <div class="field">
-      <label>كلمة السر</label>
-      <input type="password" id="password" placeholder="••••••••" />
-    </div>
-
+    <div class="field"><label>البريد الإلكتروني</label><input type="email" id="email" placeholder="admin@sulukera.com"/></div>
+    <div class="field"><label>كلمة السر</label><input type="password" id="password" placeholder="••••••••"/></div>
     <button class="login-btn" id="login-btn" onclick="doLogin()">دخول</button>
     <p class="login-error" id="login-error"></p>
   </div>
 </div>
 
-<!-- ══ Dashboard ══ -->
+<!-- Dashboard -->
 <div id="dashboard">
-
   <header>
     <div class="logo-mark">س</div>
-    <div class="header-text">
-      <h1>لوحة التحكم</h1>
-      <p>إدارة التقويم الأكاديمي</p>
-    </div>
+    <div class="header-text"><h1>لوحة التحكم</h1><p>إدارة التقويم الأكاديمي 2026</p></div>
     <div class="header-actions">
       <span id="user-email"></span>
       <a href="index.html" target="_blank" class="view-btn">← عرض الطلاب</a>
@@ -590,30 +467,51 @@
   </header>
 
   <div class="stats-bar">
-    <div class="stat">
-      <span class="stat-num" id="stat-total">—</span>
-      <span class="stat-label">إجمالي البرامج</span>
-    </div>
-    <div class="stat green">
-      <span class="stat-num" id="stat-visible">—</span>
-      <span class="stat-label">ظاهر للطلاب</span>
-    </div>
-    <div class="stat red">
-      <span class="stat-num" id="stat-hidden">—</span>
-      <span class="stat-label">مخفي حالياً</span>
-    </div>
+    <div class="stat"><span class="stat-num" id="stat-total">—</span><span class="stat-label">إجمالي</span></div>
+    <div class="stat g"><span class="stat-num" id="stat-visible">—</span><span class="stat-label">ظاهر</span></div>
+    <div class="stat"><span class="stat-num" id="stat-hidden">—</span><span class="stat-label">مخفي</span></div>
   </div>
 
   <main>
-    <p class="section-title">البرامج الأكاديمية</p>
-    <div id="programs-grid">
-      <div class="loading-dash"><div class="spinner"></div></div>
-    </div>
+    <p class="sec-title">البرامج الأكاديمية</p>
+    <div id="programs-grid"><div class="spinner"></div></div>
   </main>
+</div>
 
+<!-- Editor Overlay -->
+<div id="editor-overlay" onclick="if(event.target===this)closeEditor()">
+  <div class="editor-panel">
+    <div class="editor-hdr">
+      <h2 id="editor-title">تعديل التقويم</h2>
+      <button class="editor-close" onclick="closeEditor()">✕</button>
+    </div>
+
+    <div class="pal-bar">
+      <span class="pal-label">اختاري نوع اليوم:</span>
+      <div id="type-palette" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+
+    <div class="stats-chips">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-left:4px;">الإحصائيات:</span>
+      <div id="editor-stats" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+
+    <div class="editor-tip">
+      💡 اختاري النوع ثم اضغطي على الأيام — يمكنك الضغط والسحب لتلوين أيام متعددة بسرعة
+    </div>
+
+    <div class="editor-cal-wrap">
+      <div id="editor-cal"></div>
+    </div>
+
+    <div class="editor-ftr">
+      <button class="clear-btn" onclick="clearEditor()">🗑 مسح الكل</button>
+      <button class="cancel-btn" onclick="closeEditor()">إلغاء</button>
+      <button id="save-btn" onclick="saveEditor()">حفظ التغييرات</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
-
 </body>
 </html>
