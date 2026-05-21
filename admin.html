@@ -277,7 +277,7 @@
       btn.disabled=true; btn.textContent="جاري الحفظ...";
       try {
         const saveKey = currentEditorYear === 2027 ? "events_2027" : "events";
-        await setDoc(doc(db,"calendars",currentProgram),{[saveKey]:currentEvents},{merge:true});
+        await setDoc(doc(db,"calendars",currentProgram),{[saveKey]:currentEvents, lastUpdated: new Date().toISOString()},{merge:true});
         showToast("✓ تم حفظ التقويم بنجاح");
         btn.textContent="✓ محفوظ";
         setTimeout(()=>{ btn.disabled=false; btn.textContent="حفظ التغييرات"; },2000);
