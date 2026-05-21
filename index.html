@@ -273,6 +273,71 @@
     });
 
     // ═══════════════════════════════════════════
+    // دوال مساعدة
+    // ═══════════════════════════════════════════
+    function getCurrentPhase(phases, yr) {
+      if (!phases?.length) return null;
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      for (const ph of phases) {
+        if (ph.from && ph.to && today >= ph.from && today <= ph.to) return ph;
+        if (ph.from && !ph.to && today === ph.from) return ph;
+      }
+      // أقرب فصل قادم
+      const upcoming = phases
+        .filter(ph => ph.from && ph.from > today)
+        .sort((a,b) => a.from.localeCompare(b.from));
+      return upcoming[0] || null;
+    }
+
+    function getDaysLeft(toDate) {
+      if (!toDate) return null;
+      const now  = new Date(); now.setHours(0,0,0,0);
+      const end  = new Date(toDate + "T00:00:00");
+      const diff = Math.round((end - now) / 86400000);
+      return diff;
+    }
+
+    function getDaysUntil(fromDate) {
+      if (!fromDate) return null;
+      const now  = new Date(); now.setHours(0,0,0,0);
+      const start = new Date(fromDate + "T00:00:00");
+      const diff  = Math.round((start - now) / 86400000);
+      return diff;
+    }
+
+    function getCurrentWeekDates(yr) {
+      const now = new Date();
+      const day = now.getDay(); // 0=Sun
+      const sunday = new Date(now); sunday.setDate(now.getDate() - day);
+      const dates = [];
+      for (let i=0; i<7; i++) {
+        const d = new Date(sunday); d.setDate(sunday.getDate()+i);
+        if (d.getFullYear() === yr) {
+          dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+        }
+      }
+      return dates;
+    }
+
+    function scrollToToday() {
+      const todayEl = document.querySelector(".day.today");
+      if (!todayEl) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
+      const card = todayEl.closest(".month-card");
+      if (card) card.scrollIntoView({ behavior:"smooth", block:"center" });
+      // وميض
+      card.style.boxShadow = "0 0 0 3px var(--blue)";
+      setTimeout(() => card.style.boxShadow = "", 1500);
+    }
+
+    function showSnack(msg) {
+      let s = document.getElementById("snackbar");
+      if (!s) { s = document.createElement("div"); s.id="snackbar"; document.body.appendChild(s); }
+      s.textContent = msg; s.className = "snackbar show";
+      setTimeout(() => s.classList.remove("show"), 2500);
+    }
+
+    // ═══════════════════════════════════════════
     // Render
     // ═══════════════════════════════════════════
     function render() {
@@ -351,6 +416,84 @@
           `</div>`;
       }
 
+      // ── شريط الملخص ──
+      const phases    = firebaseData[id]?.phases || [];
+      const curPhase  = getCurrentPhase(phases, currentYear);
+      const now       = new Date();
+      const isThisYr  = now.getFullYear() === currentYear;
+      const lastUpd   = firebaseData[id]?.lastUpdated
+        ? new Date(firebaseData[id].lastUpdated).toLocaleDateString("ar-SA",{day:"numeric",month:"long",year:"numeric"})
+        : "";
+
+      let summaryHtml = "";
+      if (isThisYr && curPhase) {
+        const daysLeft  = curPhase.to  ? getDaysLeft(curPhase.to)    : null;
+        const daysUntil = curPhase.from && !curPhase.to ? getDaysUntil(curPhase.from) : null;
+        const isActive  = curPhase.from && curPhase.to && (() => {
+          const t = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+          return t >= curPhase.from && t <= curPhase.to;
+        })();
+
+        let statusText = "";
+        let statusClass = "status-active";
+        if (isActive && daysLeft !== null) {
+          if (daysLeft < 0)        { statusText = "انتهى"; statusClass="status-ended"; }
+          else if (daysLeft === 0) { statusText = "آخر يوم اليوم!"; statusClass="status-today"; }
+          else if (daysLeft === 1) { statusText = "باقي يوم واحد"; statusClass="status-urgent"; }
+          else if (daysLeft <= 7)  { statusText = `باقي ${daysLeft} أيام`; statusClass="status-urgent"; }
+          else                     { statusText = `باقي ${daysLeft} يوماً`; statusClass="status-active"; }
+        } else if (!isActive && curPhase.from) {
+          const until = getDaysUntil(curPhase.from);
+          if (until !== null && until > 0) { statusText = `يبدأ خلال ${until} يوم`; statusClass="status-upcoming"; }
+          else if (until === 0)            { statusText = "يبدأ اليوم!"; statusClass="status-today"; }
+        }
+
+        summaryHtml = `
+          <div class="summary-bar">
+            <div class="summary-item">
+              <span class="summary-icon">📖</span>
+              <div>
+                <div class="summary-label">المرحلة الحالية</div>
+                <div class="summary-val">${curPhase.label}</div>
+              </div>
+            </div>
+            ${statusText ? `
+            <div class="summary-item">
+              <span class="summary-icon">⏳</span>
+              <div>
+                <div class="summary-label">الوضع</div>
+                <div class="summary-val ${statusClass}">${statusText}</div>
+              </div>
+            </div>` : ""}
+            <div class="summary-item">
+              <span class="summary-icon">📅</span>
+              <div>
+                <div class="summary-label">اليوم</div>
+                <div class="summary-val">${now.toLocaleDateString("ar-SA",{weekday:"long",day:"numeric",month:"long"})}</div>
+              </div>
+            </div>
+            ${lastUpd ? `
+            <div class="summary-item summary-item-last">
+              <span class="summary-icon">🔄</span>
+              <div>
+                <div class="summary-label">آخر تحديث</div>
+                <div class="summary-val summary-small">${lastUpd}</div>
+              </div>
+            </div>` : ""}
+          </div>`;
+      } else if (lastUpd) {
+        summaryHtml = `
+          <div class="summary-bar summary-bar-simple">
+            <div class="summary-item">
+              <span class="summary-icon">🔄</span>
+              <div>
+                <div class="summary-label">آخر تحديث للتقويم</div>
+                <div class="summary-val summary-small">${lastUpd}</div>
+              </div>
+            </div>
+          </div>`;
+      }
+
       return `
         <div class="program-panel">
           <div class="panel-top">
@@ -362,11 +505,15 @@
                 <button class="yr-btn ${currentYear===2027?"active":""}" data-yr="2027"
                   onclick="switchYear(2027)">2027</button>
               </div>
+              <button class="today-btn" onclick="scrollToToday()" title="اذهب لليوم الحالي">
+                📍 اليوم
+              </button>
               <button class="pdf-btn" onclick="exportPDF('${id}')">
-                ⬇ تصدير PDF
+                ⬇ PDF
               </button>
             </div>
           </div>
+          ${summaryHtml}
           <div id="cal-panel">${buildCalendarHTML(id, events)}</div>
           ${notes ? `<div class="notes-box"><span class="notes-label">ملاحظات:</span> ${notes}</div>` : ""}
         </div>`;
@@ -409,7 +556,9 @@
           const tipText    = phaseLabel
             ? `${phaseLabel}${type === "exam" ? " — اختبارات" : type === "holiday" ? " — إجازة" : type === "break" ? " — إجازة نهاية الفصل" : ""}`
             : (type === "exam" ? "أسبوع الاختبارات" : type === "holiday" ? "إجازة رسمية" : type === "break" ? "إجازة نهاية الفصل" : type === "study" ? "أسبوع دراسي" : type === "obm" ? "جلسة مباشرة" : "");
-          html += `<span class="day ${type} ${isToday?"today":""} ${phaseLabel?"has-phase":""}"
+          const weekDates  = getCurrentWeekDates(yr);
+          const isThisWeek = weekDates.includes(ds);
+          html += `<span class="day ${type} ${isToday?"today":""} ${phaseLabel?"has-phase":""} ${isThisWeek&&!isToday?"this-week":""}"
             data-tip="${tipText}">${d}</span>`;
         }
         html += `</div></div>`;
@@ -755,6 +904,62 @@
     .day.obm    {background:#0D40FC;color:#fff;font-weight:700;}
     .day.today  {box-shadow:0 0 0 2px var(--blue);font-weight:700;color:var(--text);}
 
+    /* Today button */
+    .today-btn{
+      padding:9px 16px;background:var(--bg);border:1.5px solid var(--border);
+      border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;
+      color:var(--blue);cursor:pointer;transition:.2s;white-space:nowrap;
+    }
+    .today-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+    /* This week highlight */
+    .day.this-week{
+      background:rgba(13,64,252,.06);
+      border-radius:7px;
+    }
+
+    /* Summary bar */
+    .summary-bar{
+      display:flex;flex-wrap:wrap;align-items:center;gap:0;
+      background:linear-gradient(135deg,#001442,#001e5a);
+      border-radius:14px;margin-bottom:20px;
+      overflow:hidden;
+      box-shadow:0 4px 16px rgba(0,20,66,.15);
+    }
+    .summary-bar-simple{background:var(--card);border:1px solid var(--border);}
+    .summary-item{
+      display:flex;align-items:center;gap:12px;
+      padding:16px 22px;flex:1;min-width:160px;
+      border-left:1px solid rgba(255,255,255,.08);
+      transition:background .2s;
+    }
+    .summary-bar-simple .summary-item{border-color:var(--border);}
+    .summary-item:last-child{border-left:none;}
+    .summary-item-last{flex:0 0 auto;}
+    .summary-icon{font-size:20px;flex-shrink:0;}
+    .summary-label{font-size:11px;color:rgba(255,255,255,.5);font-weight:600;margin-bottom:3px;letter-spacing:.3px;}
+    .summary-bar-simple .summary-label{color:var(--muted);}
+    .summary-val{font-size:14px;font-weight:700;color:#fff;}
+    .summary-bar-simple .summary-val{color:var(--text);}
+    .summary-small{font-size:12px;font-weight:500;}
+    .status-active {color:#6ee7b7;}
+    .status-urgent {color:#fcd34d;animation:urgentPulse 1.5s ease-in-out infinite;}
+    .status-today  {color:#f9a8d4;animation:urgentPulse 1s ease-in-out infinite;}
+    .status-upcoming{color:#93c5fd;}
+    .status-ended  {color:rgba(255,255,255,.4);}
+    @keyframes urgentPulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+    /* Snackbar */
+    .snackbar{
+      position:fixed;bottom:30px;left:50%;
+      transform:translateX(-50%) translateY(20px);
+      background:var(--navy);color:#fff;
+      padding:10px 20px;border-radius:10px;
+      font-size:13px;font-weight:600;opacity:0;
+      transition:all .3s;pointer-events:none;z-index:9999;
+    }
+    .snackbar.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
     /* Notes */
     .notes-box{margin-top:20px;background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:14px 18px;font-size:13px;color:#6d4c00;}
     .notes-label{font-weight:700;margin-left:6px;}
@@ -811,6 +1016,9 @@
       .month-card{padding:10px 8px;}
       .panel-top{flex-direction:column;}
       .panel-controls{width:100%;justify-content:space-between;}
+      .summary-bar{flex-direction:column;gap:0;}
+      .summary-item{border-left:none;border-bottom:1px solid rgba(255,255,255,.08);width:100%;}
+      .summary-item:last-child{border-bottom:none;}
     }
   </style>
 </head>
