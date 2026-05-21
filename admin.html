@@ -133,6 +133,7 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="edit-btn" onclick="openEditor('${p.id}',2026)">✏️ تعديل 2026</button>
               <button class="edit-btn edit-btn-27" onclick="openEditor('${p.id}',2027)">✏️ تعديل 2027</button>
+              <button class="edit-btn edit-btn-phases" onclick="openPhases('${p.id}')">📅 الفصول</button>
             </div>
             <div class="notes-row">
               <input class="notes-input" id="notes-${p.id}" type="text"
@@ -295,6 +296,100 @@
     };
 
     // ═══════════════════════════════════════
+    // PHASES EDITOR
+    // ═══════════════════════════════════════
+    let currentPhasesId   = null;
+    let currentPhases     = [];
+
+    window.openPhases = progId => {
+      currentPhasesId = progId;
+      const s = allData[progId] || {};
+      currentPhases = JSON.parse(JSON.stringify(s.phases || []));
+      const p = ALL_PROGRAMS.find(x => x.id === progId);
+      document.getElementById("phases-title").textContent = `فصول: ${p.nameAr}`;
+      document.getElementById("phases-overlay").style.display = "flex";
+      renderPhasesList();
+    };
+
+    window.closePhases = () => {
+      document.getElementById("phases-overlay").style.display = "none";
+      currentPhasesId = null;
+      currentPhases   = [];
+    };
+
+    function renderPhasesList() {
+      const list = document.getElementById("phases-list");
+      if (currentPhases.length === 0) {
+        list.innerHTML = `<div class="phases-empty">لا توجد فصول — اضغطي "إضافة فصل"</div>`;
+        return;
+      }
+      list.innerHTML = currentPhases.map((ph, i) => `
+        <div class="phase-row">
+          <div class="phase-num">${i+1}</div>
+          <div class="phase-fields">
+            <input class="phase-input phase-label-input" type="text"
+              placeholder="اسم الفصل (مثل: الفصل الأول)"
+              value="${(ph.label||"").replace(/"/g,"&quot;")}"
+              oninput="updatePhase(${i},'label',this.value)" />
+            <div class="phase-dates">
+              <div class="phase-date-group">
+                <label>من</label>
+                <input class="phase-input phase-date-input" type="date"
+                  value="${ph.from||""}"
+                  oninput="updatePhase(${i},'from',this.value)" />
+              </div>
+              <div class="phase-date-group">
+                <label>إلى</label>
+                <input class="phase-input phase-date-input" type="date"
+                  value="${ph.to||""}"
+                  oninput="updatePhase(${i},'to',this.value)" />
+              </div>
+            </div>
+          </div>
+          <button class="phase-del-btn" onclick="deletePhase(${i})">✕</button>
+        </div>`).join("");
+    }
+
+    window.updatePhase = (i, field, val) => {
+      currentPhases[i][field] = val;
+    };
+
+    window.addPhase = () => {
+      currentPhases.push({ label: "", from: "", to: "" });
+      renderPhasesList();
+      // scroll to bottom
+      const list = document.getElementById("phases-list");
+      list.scrollTop = list.scrollHeight;
+      // focus last label input
+      setTimeout(() => {
+        const inputs = list.querySelectorAll(".phase-label-input");
+        inputs[inputs.length - 1]?.focus();
+      }, 50);
+    };
+
+    window.deletePhase = i => {
+      currentPhases.splice(i, 1);
+      renderPhasesList();
+    };
+
+    window.savePhases = async () => {
+      if (!currentPhasesId) return;
+      const btn = document.getElementById("save-phases-btn");
+      btn.disabled = true; btn.textContent = "جاري الحفظ...";
+      try {
+        // تنظيف: احذف الفصول الفارغة
+        const clean = currentPhases.filter(ph => ph.label || ph.from || ph.to);
+        await setDoc(doc(db,"calendars",currentPhasesId), { phases: clean }, { merge: true });
+        showToast("✓ تم حفظ الفصول");
+        btn.textContent = "✓ محفوظ";
+        setTimeout(() => { btn.disabled=false; btn.textContent="حفظ الفصول"; }, 2000);
+      } catch(e) {
+        showToast("خطأ في الحفظ","error");
+        btn.disabled=false; btn.textContent="حفظ الفصول";
+      }
+    };
+
+    // ═══════════════════════════════════════
     // Toast
     // ═══════════════════════════════════════
     window.showToast = (msg, type="success") => {
@@ -377,6 +472,8 @@
     .prog-actions{display:flex;flex-direction:column;gap:10px;}
     .edit-btn{padding:10px 18px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:var(--blue);cursor:pointer;transition:.2s;align-self:flex-start;}
     .edit-btn-27{background:var(--bg);color:#7c3aed;border-color:#ddd6fe;}
+    .edit-btn-phases{background:var(--bg);color:#047857;border-color:#a7f3d0;}
+    .edit-btn-phases:hover{background:#047857;color:#fff;border-color:#047857;}
     .edit-btn-27:hover{background:#7c3aed;color:#fff;border-color:#7c3aed;}
     .notes-row{display:flex;gap:8px;}
     .notes-input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:.2s;background:var(--bg);}
@@ -437,6 +534,20 @@
     .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;white-space:nowrap;}
     .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
     .toast.error{background:#c0392b;}
+
+    /* Phases */
+    .phases-empty{text-align:center;padding:32px;color:var(--muted);font-size:14px;}
+    .phase-row{display:flex;align-items:flex-start;gap:10px;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:14px;}
+    .phase-num{width:26px;height:26px;background:var(--blue);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;}
+    .phase-fields{flex:1;display:flex;flex-direction:column;gap:8px;}
+    .phase-input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:.2s;background:#fff;}
+    .phase-input:focus{border-color:#047857;}
+    .phase-dates{display:flex;gap:8px;}
+    .phase-date-group{flex:1;display:flex;flex-direction:column;gap:4px;}
+    .phase-date-group label{font-size:11px;font-weight:600;color:var(--muted);}
+    .phase-date-input{direction:ltr;text-align:left;}
+    .phase-del-btn{width:30px;height:30px;background:transparent;border:1.5px solid #ffcccc;border-radius:8px;color:#cc3333;font-size:14px;cursor:pointer;flex-shrink:0;transition:.2s;display:flex;align-items:center;justify-content:center;margin-top:2px;}
+    .phase-del-btn:hover{background:#fee2e2;}
 
     @media(max-width:600px){
       header{padding:16px;flex-wrap:wrap;}
@@ -519,6 +630,39 @@
       <button class="clear-btn" onclick="clearEditor()">🗑 مسح الكل</button>
       <button class="cancel-btn" onclick="closeEditor()">إلغاء</button>
       <button id="save-btn" onclick="saveEditor()">حفظ التغييرات</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phases Overlay -->
+<div id="phases-overlay" onclick="if(event.target===this)closePhases()" style="display:none;position:fixed;inset:0;z-index:1001;background:rgba(0,10,35,.8);backdrop-filter:blur(6px);align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:24px;width:100%;max-width:620px;box-shadow:0 30px 80px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;margin:auto;">
+
+    <!-- Header -->
+    <div style="background:var(--navy);padding:18px 28px;display:flex;align-items:center;gap:16px;">
+      <h2 id="phases-title" style="font-size:17px;font-weight:700;color:#fff;flex:1;"></h2>
+      <button onclick="closePhases()" style="width:36px;height:36px;background:rgba(255,255,255,.1);border:none;border-radius:8px;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+
+    <!-- Tip -->
+    <div style="padding:12px 24px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;font-size:12px;color:#065f46;">
+      💡 حددي اسم كل فصل ونطاقه الزمني — سيظهر للطلاب عند تمرير الماوس على أي يوم داخله
+    </div>
+
+    <!-- List -->
+    <div id="phases-list" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;max-height:55vh;overflow-y:auto;"></div>
+
+    <!-- Add button -->
+    <div style="padding:0 24px 16px;">
+      <button onclick="addPhase()" style="width:100%;padding:11px;background:#f0fdf4;border:1.5px dashed #6ee7b7;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:600;color:#047857;cursor:pointer;transition:.2s;" onmouseover="this.style.background='#d1fae5'" onmouseout="this.style.background='#f0fdf4'">
+        + إضافة فصل
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="closePhases()" style="padding:10px 20px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;">إلغاء</button>
+      <button id="save-phases-btn" onclick="savePhases()" style="padding:10px 28px;background:#047857;color:#fff;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">حفظ الفصول</button>
     </div>
   </div>
 </div>
