@@ -322,29 +322,39 @@
 
     function scrollToToday() {
       const now = new Date();
-      // إذا السنة المعروضة مختلفة → بدّل للسنة الحالية أولاً
+
+      // 1. تأكد أن السنة الصحيحة معروضة
       if (currentYear !== now.getFullYear()) {
         currentYear = now.getFullYear();
         document.querySelectorAll(".yr-btn").forEach(b =>
           b.classList.toggle("active", +b.dataset.yr === currentYear));
         const panel = document.getElementById("cal-panel");
-        if (panel) { panel.innerHTML = buildCalendarHTML(); }
+        if (panel) panel.innerHTML = buildCalendarHTML();
       }
-      // انتظر render ثم اذهب
-      setTimeout(() => {
-        const todayEl = document.querySelector(".day.today");
-        if (!todayEl) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
-        const card = todayEl.closest(".month-card");
-        if (!card) return;
-        // scroll الصفحة الرئيسية
-        const rect = card.getBoundingClientRect();
-        const scrollTop = window.pageYOffset + rect.top - (window.innerHeight/2) + (rect.height/2);
-        window.scrollTo({ top: Math.max(0, scrollTop), behavior: "smooth" });
-        // وميض مميز
-        card.style.transition = "box-shadow .3s";
-        card.style.boxShadow = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.25)";
-        setTimeout(() => { card.style.boxShadow = ""; }, 2000);
-      }, 100);
+
+      // 2. ابحث بالـ id بعد render
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const cell = document.getElementById("today-cell");
+          if (!cell) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
+
+          const card = cell.closest(".month-card");
+          if (!card) return;
+
+          // 3. احسب الـ offset الحقيقي من أعلى الصفحة
+          let offsetTop = 0;
+          let el = card;
+          while (el) { offsetTop += el.offsetTop; el = el.offsetParent; }
+
+          const target = offsetTop - (window.innerHeight / 2) + (card.offsetHeight / 2);
+          window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+
+          // 4. وميض
+          card.style.transition = "box-shadow .3s";
+          card.style.boxShadow  = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.3)";
+          setTimeout(() => { card.style.boxShadow = ""; }, 2200);
+        });
+      });
     }
 
     function showSnack(msg) {
@@ -573,7 +583,7 @@
           const weekDates  = getCurrentWeekDates(yr);
           const isThisWeek = weekDates.includes(ds);
           html += `<span class="day ${type} ${isToday?"today":""} ${phaseLabel?"has-phase":""} ${isThisWeek&&!isToday?"this-week":""}"
-            data-tip="${tipText}">${d}</span>`;
+            data-tip="${tipText}" ${isToday?'id="today-cell"':''}>${d}</span>`;
         }
         html += `</div></div>`;
       }
