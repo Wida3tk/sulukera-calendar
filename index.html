@@ -321,13 +321,30 @@
     }
 
     function scrollToToday() {
-      const todayEl = document.querySelector(".day.today");
-      if (!todayEl) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
-      const card = todayEl.closest(".month-card");
-      if (card) card.scrollIntoView({ behavior:"smooth", block:"center" });
-      // وميض
-      card.style.boxShadow = "0 0 0 3px var(--blue)";
-      setTimeout(() => card.style.boxShadow = "", 1500);
+      const now = new Date();
+      // إذا السنة المعروضة مختلفة → بدّل للسنة الحالية أولاً
+      if (currentYear !== now.getFullYear()) {
+        currentYear = now.getFullYear();
+        document.querySelectorAll(".yr-btn").forEach(b =>
+          b.classList.toggle("active", +b.dataset.yr === currentYear));
+        const panel = document.getElementById("cal-panel");
+        if (panel) { panel.innerHTML = buildCalendarHTML(); }
+      }
+      // انتظر render ثم اذهب
+      setTimeout(() => {
+        const todayEl = document.querySelector(".day.today");
+        if (!todayEl) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
+        const card = todayEl.closest(".month-card");
+        if (!card) return;
+        // scroll الصفحة الرئيسية
+        const rect = card.getBoundingClientRect();
+        const scrollTop = window.pageYOffset + rect.top - (window.innerHeight/2) + (rect.height/2);
+        window.scrollTo({ top: Math.max(0, scrollTop), behavior: "smooth" });
+        // وميض مميز
+        card.style.transition = "box-shadow .3s";
+        card.style.boxShadow = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.25)";
+        setTimeout(() => { card.style.boxShadow = ""; }, 2000);
+      }, 100);
     }
 
     function showSnack(msg) {
@@ -426,24 +443,24 @@
         : "";
 
       let summaryHtml = "";
-      if (isThisYr && curPhase) {
-        const daysLeft  = curPhase.to  ? getDaysLeft(curPhase.to)    : null;
-        const daysUntil = curPhase.from && !curPhase.to ? getDaysUntil(curPhase.from) : null;
-        const isActive  = curPhase.from && curPhase.to && (() => {
+      if (isThisYr) {
+      const _ph = curPhase; // قد يكون null
+        const daysLeft  = _ph?.to  ? getDaysLeft(_ph.to) : null;
+        const isActive  = _ph?.from && _ph?.to && (() => {
           const t = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-          return t >= curPhase.from && t <= curPhase.to;
+          return t >= _ph.from && t <= _ph.to;
         })();
 
         let statusText = "";
         let statusClass = "status-active";
-        if (isActive && daysLeft !== null) {
+        if (_ph && isActive && daysLeft !== null) {
           if (daysLeft < 0)        { statusText = "انتهى"; statusClass="status-ended"; }
           else if (daysLeft === 0) { statusText = "آخر يوم اليوم!"; statusClass="status-today"; }
           else if (daysLeft === 1) { statusText = "باقي يوم واحد"; statusClass="status-urgent"; }
           else if (daysLeft <= 7)  { statusText = `باقي ${daysLeft} أيام`; statusClass="status-urgent"; }
           else                     { statusText = `باقي ${daysLeft} يوماً`; statusClass="status-active"; }
-        } else if (!isActive && curPhase.from) {
-          const until = getDaysUntil(curPhase.from);
+        } else if (_ph && !isActive && _ph.from) {
+          const until = getDaysUntil(_ph.from);
           if (until !== null && until > 0) { statusText = `يبدأ خلال ${until} يوم`; statusClass="status-upcoming"; }
           else if (until === 0)            { statusText = "يبدأ اليوم!"; statusClass="status-today"; }
         }
@@ -451,12 +468,27 @@
         summaryHtml = `
           <div class="summary-bar">
             <div class="summary-item">
+              <span class="summary-icon">📅</span>
+              <div>
+                <div class="summary-label">اليوم</div>
+                <div class="summary-val">${now.toLocaleDateString("ar-SA",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+              </div>
+            </div>
+            ${_ph ? `
+            <div class="summary-item">
               <span class="summary-icon">📖</span>
               <div>
                 <div class="summary-label">المرحلة الحالية</div>
-                <div class="summary-val">${curPhase.label}</div>
+                <div class="summary-val">${_ph.label}</div>
               </div>
-            </div>
+            </div>` : `
+            <div class="summary-item">
+              <span class="summary-icon">📖</span>
+              <div>
+                <div class="summary-label">المرحلة</div>
+                <div class="summary-val" style="color:rgba(255,255,255,.4);font-size:12px;">أضيفي الفصول من الأدمن</div>
+              </div>
+            </div>`}
             ${statusText ? `
             <div class="summary-item">
               <span class="summary-icon">⏳</span>
@@ -465,32 +497,14 @@
                 <div class="summary-val ${statusClass}">${statusText}</div>
               </div>
             </div>` : ""}
-            <div class="summary-item">
-              <span class="summary-icon">📅</span>
-              <div>
-                <div class="summary-label">اليوم</div>
-                <div class="summary-val">${now.toLocaleDateString("ar-SA",{weekday:"long",day:"numeric",month:"long"})}</div>
-              </div>
-            </div>
             ${lastUpd ? `
-            <div class="summary-item summary-item-last">
+            <div class="summary-item">
               <span class="summary-icon">🔄</span>
               <div>
                 <div class="summary-label">آخر تحديث</div>
                 <div class="summary-val summary-small">${lastUpd}</div>
               </div>
             </div>` : ""}
-          </div>`;
-      } else if (lastUpd) {
-        summaryHtml = `
-          <div class="summary-bar summary-bar-simple">
-            <div class="summary-item">
-              <span class="summary-icon">🔄</span>
-              <div>
-                <div class="summary-label">آخر تحديث للتقويم</div>
-                <div class="summary-val summary-small">${lastUpd}</div>
-              </div>
-            </div>
           </div>`;
       }
 
