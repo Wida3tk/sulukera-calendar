@@ -44,8 +44,8 @@
       return [
         { label: "أسابيع دراسية",       color: "#ddeeff" },
         { label: "أسبوع الاختبارات",    color: "#FF6B35" },
-        { label: "إجازة نهاية الفصل",   color: "#A8E6CF" },
-        { label: "إجازة رسمية",          color: "#FFD93D" },
+        { label: "إجازة نهاية الفصل",   color: "#D8B4FE" },
+        { label: "إجازة رسمية",          color: "#FDE68A" },
       ];
     }
     function obmLegend() {
@@ -525,15 +525,15 @@
       // الأشهر بالترتيب الصحيح: يناير → ديسمبر (من اليمين لليسار في grid)
       // grid-template-columns: repeat(6,1fr) → صفان × ٦ أعمدة = ١٢ شهر
       const TYPE_COLORS = {
-        study:   "#ddeeff",
+        study:   "#BFE3FF",
         exam:    "#FF6B35",
-        break:   "#A8E6CF",
-        holiday: "#FFD93D",
+        break:   "#D8B4FE",
+        holiday: "#FDE68A",
         obm:     "#0D40FC",
       };
       const TYPE_TEXT = {
-        study: "#0D40FC", exam: "#fff", break: "#1a5c3a",
-        holiday: "#7a4f00", obm: "#fff",
+        study: "#0D40FC", exam: "#fff", break: "#5b21b6",
+        holiday: "#92400e", obm: "#fff",
       };
 
       let html = "";
@@ -730,8 +730,8 @@
     }
     .day.study  {background:#BFE3FF;color:#0D40FC;font-weight:600;}
     .day.exam   {background:#FF6B35;color:#fff;font-weight:700;}
-    .day.break  {background:#C8F0DE;color:#1a5c3a;font-weight:600;}
-    .day.holiday{background:#FFE97A;color:#6d4400;font-weight:600;}
+    .day.break  {background:#D8B4FE;color:#5b21b6;font-weight:700;}
+    .day.holiday{background:#FDE68A;color:#92400e;font-weight:600;}
     .day.obm    {background:#0D40FC;color:#fff;font-weight:700;}
     .day.today  {box-shadow:0 0 0 2px var(--blue);font-weight:700;color:var(--text);}
 
