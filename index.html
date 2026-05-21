@@ -248,9 +248,23 @@
     // Firebase listener
     // ═══════════════════════════════════════════
     window.addEventListener("DOMContentLoaded", () => {
+      // Migration: رفع بيانات 2026 لـ Firebase إذا كانت فارغة
+      async function migrateEventsIfNeeded(progId, fbDoc) {
+        if (!fbDoc.events && EVENTS_2026[progId] && Object.keys(EVENTS_2026[progId]).length > 0) {
+          try {
+            const { setDoc, doc: firestoreDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+            await setDoc(firestoreDoc(db,"calendars",progId), { events: EVENTS_2026[progId] }, { merge: true });
+          } catch(e) { console.warn("migration failed for", progId, e); }
+        }
+      }
+
       onSnapshot(collection(db, "calendars"), snap => {
         firebaseData = {};
-        snap.forEach(d => { firebaseData[d.id] = d.data(); });
+        snap.forEach(d => {
+          firebaseData[d.id] = d.data();
+          // migration في الخلفية
+          migrateEventsIfNeeded(d.id, d.data());
+        });
         render();
       }, err => {
         document.getElementById("loading").innerHTML =
@@ -318,10 +332,13 @@
       const notes  = fbData.notes      || "";
       const legend = meta.legend       || [];
 
-      // أحداث: 2026 من الكود، 2027 من Firebase
-      const events2026 = EVENTS_2026[id] || {};
-      const events2027 = fbData.events_2027 || {};
-      const events     = currentYear === 2026 ? events2026 : events2027;
+      // أحداث: Firebase أولاً (يشمل تعديلات الأدمن)، ثم الكود احتياطياً
+      const fbEvents2026 = fbData.events       || null;
+      const fbEvents2027 = fbData.events_2027  || null;
+      const codeEvents   = EVENTS_2026[id]     || {};
+      const events = currentYear === 2026
+        ? (fbEvents2026 !== null ? fbEvents2026 : codeEvents)
+        : (fbEvents2027 !== null ? fbEvents2027 : {});
 
       // legend html
       let legendHtml = "";
@@ -362,9 +379,12 @@
       if (eventsOverride !== undefined) {
         events = eventsOverride;
       } else {
+        const fb2026 = fbData.events      || null;
+        const fb2027 = fbData.events_2027 || null;
+        const code26 = EVENTS_2026[progId] || {};
         events = currentYear === 2026
-          ? (EVENTS_2026[progId] || {})
-          : (fbData.events_2027 || {});
+          ? (fb2026 !== null ? fb2026 : code26)
+          : (fb2027 !== null ? fb2027 : {});
       }
 
       const yr  = currentYear;
