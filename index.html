@@ -323,7 +323,7 @@
     function scrollToToday() {
       const now = new Date();
 
-      // 1. تأكد أن السنة الصحيحة معروضة
+      // بدّل للسنة الحالية إذا لزم
       if (currentYear !== now.getFullYear()) {
         currentYear = now.getFullYear();
         document.querySelectorAll(".yr-btn").forEach(b =>
@@ -332,29 +332,27 @@
         if (panel) panel.innerHTML = buildCalendarHTML();
       }
 
-      // 2. ابحث بالـ id بعد render
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const cell = document.getElementById("today-cell");
-          if (!cell) { showSnack("اليوم الحالي ليس في هذه السنة"); return; }
+      // الشهر الحالي = index m (0-11)
+      const targetMonth = now.getMonth();
+      // كل الـ month-cards مرتبة من 0 إلى 11
+      const cards = document.querySelectorAll(".month-card");
+      if (!cards || cards.length === 0) { showSnack("لا يوجد تقويم معروض"); return; }
+      const card = cards[targetMonth];
+      if (!card) { showSnack("الشهر غير موجود"); return; }
 
-          const card = cell.closest(".month-card");
-          if (!card) return;
+      // scroll مباشر للبطاقة
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
 
-          // 3. احسب الـ offset الحقيقي من أعلى الصفحة
-          let offsetTop = 0;
-          let el = card;
-          while (el) { offsetTop += el.offsetTop; el = el.offsetParent; }
-
-          const target = offsetTop - (window.innerHeight / 2) + (card.offsetHeight / 2);
-          window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-
-          // 4. وميض
-          card.style.transition = "box-shadow .3s";
-          card.style.boxShadow  = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.3)";
-          setTimeout(() => { card.style.boxShadow = ""; }, 2200);
-        });
-      });
+      // وميض
+      setTimeout(() => {
+        card.style.transition = "box-shadow .3s, border-color .3s";
+        card.style.boxShadow  = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.25)";
+        card.style.borderColor = "var(--blue)";
+        setTimeout(() => {
+          card.style.boxShadow  = "";
+          card.style.borderColor = "";
+        }, 2000);
+      }, 400);
     }
 
     function showSnack(msg) {
@@ -384,17 +382,25 @@
         return;
       }
 
-      // أول برنامج ظاهر افتراضياً
+      // أولوية: URL param → localStorage → أول برنامج
+      const urlParam  = new URLSearchParams(window.location.search).get("program");
+      const savedProg = localStorage.getItem("sulukera_my_program");
       if (!activeProgram || !visible.includes(activeProgram)) {
-        activeProgram = visible[0];
+        if (urlParam && visible.includes(urlParam))       activeProgram = urlParam;
+        else if (savedProg && visible.includes(savedProg)) activeProgram = savedProg;
+        else                                               activeProgram = visible[0];
       }
 
       // ── Tabs برامج ──
+      const myProg = localStorage.getItem("sulukera_my_program");
       let html = `<div class="tabs-wrapper"><div class="tabs">`;
       for (const id of visible) {
-        const name = PROGRAMS_META[id]?.nameAr || id;
+        const name  = PROGRAMS_META[id]?.nameAr || id;
+        const isMine = id === myProg;
         html += `<button class="tab ${id===activeProgram?"active":""}"
-          onclick="switchProgram('${id}')">${name}</button>`;
+          onclick="switchProgram('${id}')">
+          ${isMine ? '<span class="my-star" title="برنامجي">⭐</span>' : ""}${name}
+        </button>`;
       }
       html += `</div></div>`;
 
@@ -404,8 +410,14 @@
       container.innerHTML = html;
     }
 
-    window.switchProgram = id => {
+    window.switchProgram = (id, save=true) => {
       activeProgram = id;
+      // حفظ في localStorage كـ"برنامجي"
+      if (save) localStorage.setItem("sulukera_my_program", id);
+      // تحديث URL بدون reload
+      const url = new URL(window.location.href);
+      url.searchParams.set("program", id);
+      window.history.replaceState({}, "", url.toString());
       render();
       window.scrollTo({top:0,behavior:"smooth"});
     };
@@ -885,6 +897,16 @@
     .pdf-btn:hover{background:#002266;}
     .pdf-btn:disabled{opacity:.6;cursor:not-allowed;}
 
+    /* Swipe mobile */
+    @media(max-width:600px){
+      .year-grid{
+        display:flex !important;
+        flex-direction:column;
+        gap:12px;
+      }
+      .month-card{ width:100%; }
+    }
+
     /* Calendar grid */
     .year-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
     .month-card{
@@ -1027,6 +1049,17 @@
     .day[data-tip]:not([data-tip=""]) { position: relative; }
     .day.has-phase { outline: 1.5px solid rgba(13,64,252,.2); outline-offset: -1px; }
 
+    /* Skeleton loading */
+    .skeleton-tabs{display:flex;gap:8px;margin-bottom:24px;}
+    .skeleton-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+    .skel{border-radius:12px;background:linear-gradient(90deg,#e8ecf4 25%,#f4f6fb 50%,#e8ecf4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;}
+    .skel-tab{height:42px;width:120px;border-radius:10px;}
+    .skel-card{height:220px;}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* My star */
+    .my-star{font-size:11px;margin-left:4px;vertical-align:middle;}
+
     /* Footer */
     footer{text-align:center;padding:20px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);}
 
@@ -1062,8 +1095,21 @@
 
 <main>
   <div id="loading">
-    <div class="spinner"></div>
-    <p style="color:var(--muted);font-size:14px">جاري تحميل التقويم...</p>
+    <div class="skeleton-tabs">
+      <div class="skel skel-tab"></div>
+      <div class="skel skel-tab"></div>
+      <div class="skel skel-tab"></div>
+    </div>
+    <div class="skeleton-grid">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
   </div>
   <div id="programs-container"></div>
 </main>
