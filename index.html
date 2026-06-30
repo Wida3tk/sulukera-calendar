@@ -240,9 +240,25 @@
     const DAYS_AR   = ["ح","ن","ث","ر","خ","ج","س"];
 
     // حالة التطبيق
-    let currentYear       = 2026;
     let activeProgram     = null;
     let firebaseData      = {};  // بيانات Firebase (visible, notes, events_2027)
+
+    // توليد قائمة الأشهر القادمة فقط (من الشهر الحالي حتى نهاية 2027) — بدون فواصل سنوية
+    function getUpcomingMonths() {
+      const now = new Date();
+      const months = [];
+      for (let yr = now.getFullYear(); yr <= 2027; yr++) {
+        const startM = (yr === now.getFullYear()) ? now.getMonth() : 0;
+        for (let m = startM; m < 12; m++) {
+          months.push({ year: yr, month: m });
+        }
+      }
+      // إذا كانت السنة الحالية بعد 2027 (احتياط) أرجع آخر 12 شهر بسنة 2027
+      if (months.length === 0) {
+        for (let m=0; m<12; m++) months.push({year:2027, month:m});
+      }
+      return months;
+    }
 
     // ═══════════════════════════════════════════
     // Firebase listener
@@ -321,29 +337,13 @@
     }
 
     function scrollToToday() {
-      const now = new Date();
-
-      // بدّل للسنة الحالية إذا لزم
-      if (currentYear !== now.getFullYear()) {
-        currentYear = now.getFullYear();
-        document.querySelectorAll(".yr-btn").forEach(b =>
-          b.classList.toggle("active", +b.dataset.yr === currentYear));
-        const panel = document.getElementById("cal-panel");
-        if (panel) panel.innerHTML = buildCalendarHTML();
-      }
-
-      // الشهر الحالي = index m (0-11)
-      const targetMonth = now.getMonth();
-      // كل الـ month-cards مرتبة من 0 إلى 11
+      // بما أن التسلسل يبدأ دائماً من الشهر الحالي، الشهر الحالي هو أول بطاقة
       const cards = document.querySelectorAll(".month-card");
       if (!cards || cards.length === 0) { showSnack("لا يوجد تقويم معروض"); return; }
-      const card = cards[targetMonth];
-      if (!card) { showSnack("الشهر غير موجود"); return; }
+      const card = cards[0];
 
-      // scroll مباشر للبطاقة
       card.scrollIntoView({ behavior: "smooth", block: "center" });
 
-      // وميض
       setTimeout(() => {
         card.style.transition = "box-shadow .3s, border-color .3s";
         card.style.boxShadow  = "0 0 0 3px var(--blue), 0 8px 32px rgba(13,64,252,.25)";
@@ -422,27 +422,22 @@
       window.scrollTo({top:0,behavior:"smooth"});
     };
 
-    window.switchYear = yr => {
-      currentYear = yr;
-      document.querySelectorAll(".yr-btn").forEach(b =>
-        b.classList.toggle("active", +b.dataset.yr === yr));
-      const panel = document.getElementById("cal-panel");
-      if (panel) panel.innerHTML = buildCalendarHTML();
-    };
+    function getMergedEvents(id) {
+      const fbData = firebaseData[id] || {};
+      const fb2026 = fbData.events       || null;
+      const fb2027 = fbData.events_2027  || null;
+      const code26 = EVENTS_2026[id]     || {};
+      const events2026 = fb2026 !== null ? fb2026 : code26;
+      const events2027 = fb2027 !== null ? fb2027 : {};
+      return { ...events2026, ...events2027 };
+    }
 
     function buildProgramPanel(id) {
       const meta   = PROGRAMS_META[id] || {};
       const fbData = firebaseData[id]  || {};
       const notes  = fbData.notes      || "";
       const legend = meta.legend       || [];
-
-      // أحداث: Firebase أولاً (يشمل تعديلات الأدمن)، ثم الكود احتياطياً
-      const fbEvents2026 = fbData.events       || null;
-      const fbEvents2027 = fbData.events_2027  || null;
-      const codeEvents   = EVENTS_2026[id]     || {};
-      const events = currentYear === 2026
-        ? (fbEvents2026 !== null ? fbEvents2026 : codeEvents)
-        : (fbEvents2027 !== null ? fbEvents2027 : {});
+      const events = getMergedEvents(id);
 
       // legend html
       let legendHtml = "";
@@ -457,37 +452,34 @@
 
       // ── شريط الملخص ──
       const phases    = firebaseData[id]?.phases || [];
-      const curPhase  = getCurrentPhase(phases, currentYear);
       const now       = new Date();
-      const isThisYr  = now.getFullYear() === currentYear;
+      const curPhase  = getCurrentPhase(phases, now.getFullYear());
       const lastUpd   = firebaseData[id]?.lastUpdated
         ? new Date(firebaseData[id].lastUpdated).toLocaleDateString("ar-SA",{day:"numeric",month:"long",year:"numeric"})
         : "";
 
-      let summaryHtml = "";
-      if (isThisYr) {
-      const _ph = curPhase; // قد يكون null
-        const daysLeft  = _ph?.to  ? getDaysLeft(_ph.to) : null;
-        const isActive  = _ph?.from && _ph?.to && (() => {
-          const t = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-          return t >= _ph.from && t <= _ph.to;
-        })();
+      const _ph = curPhase;
+      const daysLeft  = _ph?.to  ? getDaysLeft(_ph.to) : null;
+      const isActive  = _ph?.from && _ph?.to && (() => {
+        const t = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+        return t >= _ph.from && t <= _ph.to;
+      })();
 
-        let statusText = "";
-        let statusClass = "status-active";
-        if (_ph && isActive && daysLeft !== null) {
-          if (daysLeft < 0)        { statusText = "انتهى"; statusClass="status-ended"; }
-          else if (daysLeft === 0) { statusText = "آخر يوم اليوم!"; statusClass="status-today"; }
-          else if (daysLeft === 1) { statusText = "باقي يوم واحد"; statusClass="status-urgent"; }
-          else if (daysLeft <= 7)  { statusText = `باقي ${daysLeft} أيام`; statusClass="status-urgent"; }
-          else                     { statusText = `باقي ${daysLeft} يوماً`; statusClass="status-active"; }
-        } else if (_ph && !isActive && _ph.from) {
-          const until = getDaysUntil(_ph.from);
-          if (until !== null && until > 0) { statusText = `يبدأ خلال ${until} يوم`; statusClass="status-upcoming"; }
-          else if (until === 0)            { statusText = "يبدأ اليوم!"; statusClass="status-today"; }
-        }
+      let statusText = "";
+      let statusClass = "status-active";
+      if (_ph && isActive && daysLeft !== null) {
+        if (daysLeft < 0)        { statusText = "انتهى"; statusClass="status-ended"; }
+        else if (daysLeft === 0) { statusText = "آخر يوم اليوم!"; statusClass="status-today"; }
+        else if (daysLeft === 1) { statusText = "باقي يوم واحد"; statusClass="status-urgent"; }
+        else if (daysLeft <= 7)  { statusText = `باقي ${daysLeft} أيام`; statusClass="status-urgent"; }
+        else                     { statusText = `باقي ${daysLeft} يوماً`; statusClass="status-active"; }
+      } else if (_ph && !isActive && _ph.from) {
+        const until = getDaysUntil(_ph.from);
+        if (until !== null && until > 0) { statusText = `يبدأ خلال ${until} يوم`; statusClass="status-upcoming"; }
+        else if (until === 0)            { statusText = "يبدأ اليوم!"; statusClass="status-today"; }
+      }
 
-        summaryHtml = `
+      const summaryHtml = `
           <div class="summary-bar">
             <div class="summary-item">
               <span class="summary-icon">📅</span>
@@ -528,19 +520,12 @@
               </div>
             </div>` : ""}
           </div>`;
-      }
 
       return `
         <div class="program-panel">
           <div class="panel-top">
             ${legendHtml}
             <div class="panel-controls">
-              <div class="yr-switcher">
-                <button class="yr-btn ${currentYear===2026?"active":""}" data-yr="2026"
-                  onclick="switchYear(2026)">2026</button>
-                <button class="yr-btn ${currentYear===2027?"active":""}" data-yr="2027"
-                  onclick="switchYear(2027)">2027</button>
-              </div>
               <button class="today-btn" onclick="scrollToToday()" title="اذهب لليوم الحالي">
                 📍 اليوم
               </button>
@@ -558,27 +543,22 @@
     function buildCalendarHTML(id, eventsOverride) {
       const progId = id || activeProgram;
       const fbData = firebaseData[progId] || {};
-      let events;
-      if (eventsOverride !== undefined) {
-        events = eventsOverride;
-      } else {
-        const fb2026 = fbData.events      || null;
-        const fb2027 = fbData.events_2027 || null;
-        const code26 = EVENTS_2026[progId] || {};
-        events = currentYear === 2026
-          ? (fb2026 !== null ? fb2026 : code26)
-          : (fb2027 !== null ? fb2027 : {});
-      }
+      const events = eventsOverride !== undefined ? eventsOverride : getMergedEvents(progId);
 
-      const yr  = currentYear;
-      const now = new Date();
+      const now          = new Date();
+      const upcomingMonths = getUpcomingMonths();
+      const weekDatesNow  = getCurrentWeekDates(now.getFullYear());
+      const phases        = fbData.phases || [];
 
       let html = `<div class="year-grid">`;
-      for (let m = 0; m < 12; m++) {
+      for (const { year: yr, month: m } of upcomingMonths) {
         const fd  = new Date(yr, m, 1).getDay();
         const dim = new Date(yr, m+1, 0).getDate();
+        const totalCells = fd + dim;
+        const trailing = (Math.ceil(totalCells/7)*7) - totalCells; // لتوحيد ارتفاع كل البطاقات على 6 صفوف كحد أقصى
+
         html += `<div class="month-card">
-          <div class="month-name">${MONTHS_AR[m]}</div>
+          <div class="month-name">${MONTHS_AR[m]} <span class="month-year">${yr}</span></div>
           <div class="days-header">`;
         DAYS_AR.forEach(d => { html += `<span>${d}</span>`; });
         html += `</div><div class="days-grid">`;
@@ -587,16 +567,16 @@
           const ds      = `${yr}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
           const type    = events[ds] || "";
           const isToday = now.getFullYear()===yr && now.getMonth()===m && now.getDate()===d;
-          const phases     = (firebaseData[progId]?.phases || []);
           const phaseLabel = getPhaseLabel(ds, phases);
           const tipText    = phaseLabel
             ? `${phaseLabel}${type === "exam" ? " — اختبارات" : type === "holiday" ? " — إجازة" : type === "break" ? " — إجازة نهاية الفصل" : ""}`
             : (type === "exam" ? "أسبوع الاختبارات" : type === "holiday" ? "إجازة رسمية" : type === "break" ? "إجازة نهاية الفصل" : type === "study" ? "أسبوع دراسي" : type === "obm" ? "جلسة مباشرة" : "");
-          const weekDates  = getCurrentWeekDates(yr);
-          const isThisWeek = weekDates.includes(ds);
+          const isThisWeek = weekDatesNow.includes(ds);
           html += `<span class="day ${type} ${isToday?"today":""} ${phaseLabel?"has-phase":""} ${isThisWeek&&!isToday?"this-week":""}"
             data-tip="${tipText}" ${isToday?'id="today-cell"':''}>${d}</span>`;
         }
+        // خلايا فارغة لاحقة لتوحيد ارتفاع كل بطاقات الشهور
+        for (let i=0; i<trailing; i++) html += `<span></span>`;
         html += `</div></div>`;
       }
       html += `</div>`;
@@ -615,17 +595,11 @@
       btn.textContent = "⏳ جاري التصدير...";
 
       try {
-        const { jsPDF } = window.jspdf;
-
-        const fbData = firebaseData[progId] || {};
-        const events = currentYear === 2026
-          ? (EVENTS_2026[progId] || {})
-          : (fbData.events_2027 || {});
-
-        const legend = meta.legend || [];
+        const events  = getMergedEvents(progId);
+        const legend  = meta.legend || [];
+        const months  = getUpcomingMonths().slice(0, 12); // أول 12 شهر قادم فقط للصفحة الواحدة
 
         // A4 landscape = 297×210mm → عند 96dpi ≈ 1122×794px
-        // نجعل printDiv عرض 1100px ثابت لضمان صفحة واحدة
         const printDiv = document.createElement("div");
         printDiv.style.cssText = `
           position:fixed;
@@ -640,13 +614,17 @@
           overflow:hidden;
         `;
 
+        const firstYr = months[0]?.year || new Date().getFullYear();
+        const lastYr  = months[months.length-1]?.year || firstYr;
+        const yrLabel = firstYr === lastYr ? `${firstYr}` : `${firstYr}–${lastYr}`;
+
         // ── Header ──
         printDiv.innerHTML = `
           <div style="display:flex;align-items:center;justify-content:space-between;
             margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #0D40FC;">
             <div>
               <div style="font-size:20px;font-weight:800;color:#001442;margin-bottom:2px;">
-                سلوكيرا – التقويم الأكاديمي ${currentYear}
+                سلوكيرا – التقويم الأكاديمي ${yrLabel}
               </div>
               <div style="font-size:13px;color:#6b7a9a;">${name}</div>
             </div>
@@ -668,11 +646,11 @@
           <div id="pdf-months-grid"
             style="display:grid;grid-template-columns:repeat(6,1fr);
               grid-template-rows:repeat(2,1fr);gap:10px;flex:1;">
-            ${buildPrintCalendar(events, currentYear)}
+            ${buildPrintCalendar(events, months)}
           </div>
 
           <div style="margin-top:12px;text-align:center;font-size:10px;color:#bbb;">
-            sulukera.com — جميع الحقوق محفوظة © ${currentYear}
+            sulukera.com — جميع الحقوق محفوظة © ${yrLabel}
           </div>`;
 
         // إخفاء عن المستخدم أثناء التقاط
@@ -715,7 +693,7 @@
         pdf.addImage(canvas.toDataURL("image/png","1.0"), "PNG",
           offX, offY, finalW, finalH);
 
-        pdf.save(`sulukera-${progId}-${currentYear}.pdf`);
+        pdf.save(`sulukera-${progId}-${yrLabel}.pdf`);
 
       } catch (e) {
         console.error(e);
@@ -726,9 +704,7 @@
       btn.textContent = "⬇ تصدير PDF";
     };
 
-    function buildPrintCalendar(events, yr) {
-      // الأشهر بالترتيب الصحيح: يناير → ديسمبر (من اليمين لليسار في grid)
-      // grid-template-columns: repeat(6,1fr) → صفان × ٦ أعمدة = ١٢ شهر
+    function buildPrintCalendar(events, months) {
       const TYPE_COLORS = {
         study:   "#BFE3FF",
         exam:    "#FF6B35",
@@ -742,17 +718,17 @@
       };
 
       let html = "";
-      for (let m = 0; m < 12; m++) {
+      for (const { year: yr, month: m } of months) {
         const fd  = new Date(yr, m, 1).getDay();
         const dim = new Date(yr, m+1, 0).getDate();
+        const totalCells = fd + dim;
+        const trailing = (Math.ceil(totalCells/7)*7) - totalCells;
 
-        // حجم الخلية: عرض الشهر ≈ (1122-64-50)/6 ≈ 168px
-        // ارتفاع الشهر للصف الواحد: max 6 أسابيع × 22px + header
         html += `
         <div style="background:#f8faff;border:1px solid #dde5ff;border-radius:10px;
           padding:8px 6px;display:flex;flex-direction:column;">
           <div style="font-size:13px;font-weight:700;color:#001442;
-            text-align:center;margin-bottom:6px;">${MONTHS_AR[m]}</div>
+            text-align:center;margin-bottom:6px;">${MONTHS_AR[m]} <span style="font-weight:500;color:#8899bb;font-size:11px;">${yr}</span></div>
 
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:2px;">
             ${["ح","ن","ث","ر","خ","ج","س"].map(d=>
@@ -780,6 +756,7 @@
                 print-color-adjust:exact;
               ">${d}</span>`;
             }).join("")}
+            ${Array(trailing).fill(`<span></span>`).join("")}
           </div>
         </div>`;
       }
@@ -938,6 +915,7 @@
     .month-card:nth-child(11){animation-delay:.33s}
     .month-card:nth-child(12){animation-delay:.36s}
     .month-name{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;text-align:center;}
+    .month-year{font-size:11px;font-weight:500;color:var(--muted);}
     .days-header{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
     .days-header span{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px 0;}
     .days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
