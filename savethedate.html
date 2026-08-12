@@ -93,6 +93,8 @@
       onSnapshot(collection(db,"calendars"), snap => {
         allFbData = {};
         snap.forEach(d => { allFbData[d.id] = d.data(); });
+      }, () => {
+        document.getElementById("cards-grid").innerHTML = `<div class="empty">تعذر تحميل البرامج — راجعي صلاحيات Firestore</div>`;
       });
 
       // قراءة save-the-date
@@ -100,6 +102,8 @@
         stdData = {};
         snap.forEach(d => { stdData[d.id] = d.data(); });
         renderCards();
+      }, () => {
+        document.getElementById("cards-grid").innerHTML = `<div class="empty">تعذر تحميل المواعيد — راجعي صلاحيات Firestore</div>`;
       });
     });
 

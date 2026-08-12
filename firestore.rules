@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+
+    match /calendars/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+    match /academic_plans/{id} {
+      allow read: if signedIn() || resource.data.visibleToStudents == true;
+      allow create, update, delete: if signedIn();
+    }
+    match /schedules/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+    match /subjects/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+    match /instructors/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+    match /savethedate/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+    match /system_events/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+  }
+}

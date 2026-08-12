@@ -203,8 +203,8 @@
     function buildCalendar() {
       let html = "";
       for (let m=0; m<12; m++) {
-        const fd  = new Date(2026,m,1).getDay();
-        const dim = new Date(2026,m+1,0).getDate();
+        const fd  = new Date(currentEditorYear,m,1).getDay();
+        const dim = new Date(currentEditorYear,m+1,0).getDate();
         html += `<div class="ecal-month">
           <div class="ecal-hdr">${MONTHS_AR[m]}</div>
           <div class="ecal-dow">`;
@@ -583,6 +583,7 @@
     <div class="header-text"><h1>لوحة التحكم</h1><p>إدارة التقويم الأكاديمي 2026</p></div>
     <div class="header-actions">
       <span id="user-email"></span>
+      <a href="planner.html" class="view-btn">⚡ المخطط الذكي</a>
       <a href="index.html" target="_blank" class="view-btn">← عرض الطلاب</a>
       <button class="logout-btn" onclick="doLogout()">خروج</button>
     </div>
