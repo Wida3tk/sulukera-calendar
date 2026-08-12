@@ -56,14 +56,15 @@ export function formatDate(date) {
 export function addDays(value, days) { const d=parseDate(value); d.setDate(d.getDate()+days); return formatDate(d); }
 export function overlaps(aStart,aEnd,bStart,bEnd) { return aStart <= bEnd && bStart <= aEnd; }
 
-export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft" }) {
+export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[] }) {
   const template = PROGRAM_TEMPLATES[templateId];
   if (!template) throw new Error("قالب البرنامج غير معروف");
   if (!startDate) throw new Error("تاريخ البداية مطلوب");
   let cursor = startDate;
   const blocks = [];
-  const semesterCount = template.semesters || 1;
-  for (let semester=1; semester<=semesterCount; semester++) {
+  const totalSemesters = template.semesters ? Math.max(1,Math.min(template.semesters,Number(semesterCount)||template.semesters)) : 1;
+  for (let semester=1; semester<=totalSemesters; semester++) {
+    const semesterName = String(semesterNames[semester-1]||`الفصل ${semester}`).trim();
     let weekInSemester=1;
     template.blocks.forEach((definition, definitionIndex) => {
       for (let week=0; week<definition.weeks; week++) {
@@ -73,6 +74,7 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
           type:definition.type,
           label: definition.weeks > 1 ? `${definition.label} ${week+1}` : definition.label,
           semesterNumber: template.semesters ? semester : null,
+          semesterName: template.semesters ? semesterName : null,
           weekInSemester: template.semesters ? weekInSemester++ : null,
           courseNumber:definition.courseNumber || null,
           unitNumber:definition.unitNumber || null,
@@ -86,8 +88,8 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
       const start=cursor, end=addDays(cursor,6);
       blocks.push({
         id:`${semester}-break-${breakWeek}`,
-        type:"break", label: semester===semesterCount ? "إجازة نهاية الدفعة" : `إجازة بعد الفصل ${semester}`,
-        semesterNumber:semester, weekInSemester:null, isSemesterBreak:true,
+        type:"break", label: semester===totalSemesters ? "إجازة نهاية الدفعة" : `إجازة بعد ${semesterName}`,
+        semesterNumber:semester, semesterName, weekInSemester:null, isSemesterBreak:true,
         courseNumber:null,start,end,instructor:"",room:"",
         visibleToStudents:visibility === "published",
       });
@@ -97,6 +99,8 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
   return {
     id:`${programId || templateId}-${Date.now()}`,
     templateId, programId:programId || templateId, title:title || template.name,
+    semesterCount:template.semesters ? totalSemesters : null,
+    semesterNames:template.semesters ? Array.from({length:totalSemesters},(_,i)=>String(semesterNames[i]||`الفصل ${i+1}`).trim()) : [],
     status:visibility, visibleToStudents:visibility === "published", startDate,
     endDate:addDays(cursor,-1), blocks, createdAt:new Date().toISOString(),
   };
