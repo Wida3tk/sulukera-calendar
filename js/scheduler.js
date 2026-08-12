@@ -5,29 +5,30 @@ export const PROGRAM_TEMPLATES = {
     id: "ABA",
     name: "تحليل السلوك التطبيقي",
     kind: "semester",
-    description: "4 أسابيع دراسة + أسبوع اختبارات + أسبوع إجازة",
+    description: "الدفعة 6 فصول؛ كل فصل 4 أسابيع دراسة + أسبوع اختبارات، ثم أسبوع إجازة فاصل",
+    semesters: 6,
+    breakWeeksAfterSemester: 1,
     blocks: [
       { type: "study", label: "أسبوع دراسي", weeks: 4 },
       { type: "exam", label: "أسبوع الاختبارات", weeks: 1 },
-      { type: "break", label: "إجازة نهاية الفصل", weeks: 1 },
     ],
   },
   OBM_PRACTITIONER: {
     id: "OBM_PRACTITIONER",
     name: "إدارة السلوك التنظيمي — مسار الممارس",
     kind: "track",
-    description: "3 مقررات، مدة كل مقرر أسبوعان",
+    description: "3 وحدات؛ الوحدة الأولى أسبوعان، الثانية أسبوعان، والثالثة أسبوعان",
     blocks: Array.from({ length: 3 }, (_, i) => ({
-      type: "course", label: `المقرر ${i + 1}`, weeks: 2, courseNumber: i + 1,
+      type: "course", label: `الوحدة ${["الأولى","الثانية","الثالثة"][i]}`, weeks: 2, unitNumber: i + 1,
     })),
   },
   OBM_ADVANCED: {
     id: "OBM_ADVANCED",
     name: "إدارة السلوك التنظيمي — المسار المتقدم",
     kind: "track",
-    description: "3 مقررات، مدة كل مقرر أسبوعان",
+    description: "3 وحدات؛ الوحدة الأولى أسبوعان، الثانية أسبوعان، والثالثة أسبوعان",
     blocks: Array.from({ length: 3 }, (_, i) => ({
-      type: "course", label: `المقرر ${i + 1}`, weeks: 2, courseNumber: i + 1,
+      type: "course", label: `الوحدة ${["الأولى","الثانية","الثالثة"][i]}`, weeks: 2, unitNumber: i + 1,
     })),
   },
 };
@@ -61,20 +62,38 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
   if (!startDate) throw new Error("تاريخ البداية مطلوب");
   let cursor = startDate;
   const blocks = [];
-  template.blocks.forEach((definition, definitionIndex) => {
-    for (let week=0; week<definition.weeks; week++) {
+  const semesterCount = template.semesters || 1;
+  for (let semester=1; semester<=semesterCount; semester++) {
+    let weekInSemester=1;
+    template.blocks.forEach((definition, definitionIndex) => {
+      for (let week=0; week<definition.weeks; week++) {
+        const start=cursor, end=addDays(cursor,6);
+        blocks.push({
+          id:`${semester}-${definitionIndex}-${week}`,
+          type:definition.type,
+          label: definition.weeks > 1 ? `${definition.label} ${week+1}` : definition.label,
+          semesterNumber: template.semesters ? semester : null,
+          weekInSemester: template.semesters ? weekInSemester++ : null,
+          courseNumber:definition.courseNumber || null,
+          unitNumber:definition.unitNumber || null,
+          start,end,instructor,room,
+          visibleToStudents: visibility === "published",
+        });
+        cursor=addDays(cursor,7);
+      }
+    });
+    for (let breakWeek=0; breakWeek<(template.breakWeeksAfterSemester||0); breakWeek++) {
       const start=cursor, end=addDays(cursor,6);
       blocks.push({
-        id:`${definitionIndex}-${week}`,
-        type:definition.type,
-        label: definition.weeks > 1 ? `${definition.label} ${week+1}` : definition.label,
-        courseNumber:definition.courseNumber || null,
-        start,end,instructor,room,
-        visibleToStudents: visibility === "published",
+        id:`${semester}-break-${breakWeek}`,
+        type:"break", label: semester===semesterCount ? "إجازة نهاية الدفعة" : `إجازة بعد الفصل ${semester}`,
+        semesterNumber:semester, weekInSemester:null, isSemesterBreak:true,
+        courseNumber:null,start,end,instructor:"",room:"",
+        visibleToStudents:visibility === "published",
       });
       cursor=addDays(cursor,7);
     }
-  });
+  }
   return {
     id:`${programId || templateId}-${Date.now()}`,
     templateId, programId:programId || templateId, title:title || template.name,
