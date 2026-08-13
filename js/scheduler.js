@@ -26,9 +26,9 @@ export const PROGRAM_TEMPLATES = {
     id: "OBM_ADVANCED",
     name: "إدارة السلوك التنظيمي — المسار المتقدم",
     kind: "track",
-    description: "3 وحدات؛ الوحدة الأولى أسبوعان، الثانية أسبوعان، والثالثة أسبوعان",
+    description: "3 وحدات؛ الوحدة الرابعة أسبوعان، الخامسة أسبوعان، والسادسة أسبوعان",
     blocks: Array.from({ length: 3 }, (_, i) => ({
-      type: "course", label: `الوحدة ${["الأولى","الثانية","الثالثة"][i]}`, weeks: 2, unitNumber: i + 1,
+      type: "course", label: `الوحدة ${["الرابعة","الخامسة","السادسة"][i]}`, weeks: 2, unitNumber: i + 4,
     })),
   },
 };
@@ -55,11 +55,13 @@ export function formatDate(date) {
 }
 export function addDays(value, days) { const d=parseDate(value); d.setDate(d.getDate()+days); return formatDate(d); }
 export function overlaps(aStart,aEnd,bStart,bEnd) { return aStart <= bEnd && bStart <= aEnd; }
+export function nextSunday(value) { const d=parseDate(value), offset=(7-d.getDay())%7; d.setDate(d.getDate()+offset); return formatDate(d); }
 
 export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[] }) {
   const template = PROGRAM_TEMPLATES[templateId];
   if (!template) throw new Error("قالب البرنامج غير معروف");
   if (!startDate) throw new Error("تاريخ البداية مطلوب");
+  if (template.semesters) startDate = nextSunday(startDate);
   let cursor = startDate;
   const blocks = [];
   const totalSemesters = template.semesters ? Math.max(1,Math.min(template.semesters,Number(semesterCount)||template.semesters)) : 1;
