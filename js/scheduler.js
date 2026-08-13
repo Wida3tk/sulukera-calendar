@@ -91,7 +91,7 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
       blocks.push({
         id:`${semester}-break-${breakWeek}`,
         type:"break", label: semester===totalSemesters ? "إجازة نهاية الدفعة" : `إجازة بعد ${semesterName}`,
-        semesterNumber:semester, semesterName, weekInSemester:null, isSemesterBreak:true,
+        semesterNumber:semester, semesterName, weekInSemester:6, isSemesterBreak:true,
         courseNumber:null,start,end,instructor:"",room:"",
         visibleToStudents:visibility === "published",
       });
