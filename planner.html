@@ -62,7 +62,32 @@
     $("auto-shift")?.addEventListener("click",()=>{candidate=shiftPlanAfterHolidays(candidate);conflicts=detectConflicts(candidate,plans);renderPreview();toast("تم ترحيل الأسابيع المتعارضة")});
     $("save-draft").onclick=()=>save("draft");$("publish").onclick=()=>save("published");
   }
-  async function save(status){candidate.status=status;candidate.visibleToStudents=status==="published";candidate.blocks.forEach(b=>b.visibleToStudents=candidate.visibleToStudents);candidate.updatedAt=new Date().toISOString();await setDoc(doc(db,"academic_plans",candidate.id),candidate);toast(status==="published"?"تم اعتماد الخطة ونشرها":"تم حفظ المسودة");candidate=null;$("preview").className="panel-body empty";$("preview").innerHTML="<div class='icon'>✓</div><p>تم الحفظ بنجاح</p>"}
+  async function save(status){
+    if(!candidate)return;
+    const buttons=[$("save-draft"),$("publish")].filter(Boolean),labels=buttons.map(b=>b.textContent);
+    buttons.forEach(b=>b.disabled=true);
+    const targetButton=status==="published"?$("publish"):$("save-draft");
+    if(targetButton)targetButton.textContent="جاري الحفظ…";
+    try{
+      const payload=structuredClone(candidate);
+      payload.status=status;payload.visibleToStudents=status==="published";
+      payload.blocks.forEach(b=>b.visibleToStudents=payload.visibleToStudents);
+      payload.updatedAt=new Date().toISOString();
+      await setDoc(doc(db,"academic_plans",payload.id),payload);
+      candidate=payload;
+      toast(status==="published"?"✓ تم اعتماد الخطة ونشرها للطلاب":"✓ تم حفظ المسودة");
+      candidate=null;$("preview").className="panel-body empty";$("preview").innerHTML="<div class='icon'>✓</div><p>تم الحفظ بنجاح</p>";
+    }catch(error){
+      console.error("Saving academic plan failed",error);
+      const denied=error?.code==="permission-denied"||String(error?.message||"").includes("permission");
+      toast(denied?"تعذر الحفظ: قواعد Firebase لم تُفعّل بعد":"تعذر الحفظ — حاولي مجددًا");
+      const box=document.createElement("div");box.className="conflict error";box.style.marginTop="12px";
+      box.innerHTML=denied?"<b>الحفظ مرفوض من Firebase</b>يجب نشر قواعد Firestore الجديدة مرة واحدة، ثم إعادة المحاولة.":`<b>حدث خطأ أثناء الحفظ</b>${esc(error?.message||"خطأ غير معروف")}`;
+      $("preview").appendChild(box);
+    }finally{
+      buttons.forEach((b,i)=>{b.disabled=false;b.textContent=labels[i]});
+    }
+  }
   function renderPlans(){$("plans").innerHTML=plans.length?plans.sort((a,b)=>b.startDate.localeCompare(a.startDate)).map(p=>`<div class="plan-card"><span class="badge ${p.status}">${p.status==="published"?"منشور":"مسودة"}</span><h3>${esc(p.title)}</h3><p>${p.startDate} — ${p.endDate}</p><div class="mini-actions"><button data-publish="${p.id}">${p.status==="published"?"إرجاع لمسودة":"نشر"}</button><button data-delete="${p.id}">حذف</button></div></div>`).join(""):"<div class='empty'>لا توجد خطط محفوظة بعد</div>";
     document.querySelectorAll("[data-publish]").forEach(b=>b.onclick=async()=>{const p=plans.find(x=>x.id===b.dataset.publish),status=p.status==="published"?"draft":"published";await setDoc(doc(db,"academic_plans",p.id),{status,visibleToStudents:status==="published"},{merge:true});toast("تم تحديث حالة النشر")});
     document.querySelectorAll("[data-delete]").forEach(b=>b.onclick=async()=>{if(confirm("حذف هذه الخطة؟"))await deleteDoc(doc(db,"academic_plans",b.dataset.delete))});
