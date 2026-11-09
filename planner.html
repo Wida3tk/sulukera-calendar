@@ -28,7 +28,7 @@
 <body>
 <header><div class="brand">سلوكيرا <small>ACADEMIC OPERATIONS</small></div><div class="nav"><a href="index.html">تقويم الطلاب</a><a href="schedule.html">الجداول</a><a href="admin.html">التقاويم السابقة</a><button id="logout" class="btn btn-soft hidden">خروج</button></div></header>
 <main>
-  <section id="login" class="panel"><div class="panel-head"><h2>دخول الإدارة</h2><p>مخطط البرامج محمي بحساب Firebase</p></div><div class="panel-body"><div class="field"><label>البريد الإلكتروني</label><input id="email" class="control" type="email"></div><div class="field"><label>كلمة السر</label><input id="password" class="control" type="password"></div><div id="login-error" class="login-error"></div><button id="login-btn" class="btn btn-primary">دخول</button></div></section>
+  <section id="login" class="panel"><div class="panel-head"><h2>دخول الإدارة</h2><p>مخطط البرامج محمي بحساب Firebase</p></div><form id="login-form" class="panel-body"><div class="field"><label for="email">البريد الإلكتروني</label><input id="email" class="control" type="email" autocomplete="username" required></div><div class="field"><label for="password">كلمة السر</label><input id="password" class="control" type="password" autocomplete="current-password" required></div><div id="login-error" class="login-error" role="status">جاري تحميل تسجيل الدخول…</div><button id="login-btn" class="btn btn-primary" type="submit" disabled>دخول</button></form></section>
   <div id="app" class="hidden">
     <section class="hero"><div class="hero-card"><h1>إدارة برامج 2027</h1><p>اختاري القالب، حددي المواعيد، وراجعي التقويم قبل نشره للطلاب.</p></div><div class="stats"><div class="stat"><b id="stat-plans">0</b>خطة</div><div class="stat"><b id="stat-conflicts">0</b>تنبيه نشط</div><div class="stat"><b id="stat-published">0</b>منشور</div><div class="stat"><b id="stat-holidays">0</b>مناسبة سعودية</div></div></section>
     <section class="layout"><aside class="panel"><div class="panel-head"><h2>إنشاء خطة جديدة</h2><p>اختاري القالب وتاريخ البداية؛ النظام يبني الباقي.</p></div><div class="panel-body">
@@ -59,7 +59,7 @@
   import { auth,db } from "./js/firebase.js";
   import { onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { collection,onSnapshot,doc,deleteDoc,getDocsFromServer,runTransaction,query,where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { PROGRAM_TEMPLATES,SAUDI_EVENTS,generatePlan,detectConflicts,shiftPlanAfterHolidays,nextSunday,addDays,RAMADAN_BREAK_2027 } from "./js/scheduler.js";
+  import { PROGRAM_TEMPLATES,SAUDI_EVENTS,generatePlan,detectConflicts,shiftPlanAfterHolidays,nextSunday,addDays,RAMADAN_BREAK_2027 } from "./js/scheduler.js?v=2027-breaks";
   let plans=[],candidate=null,conflicts=[],editingId=null, unsubscribe, busy=false;
   const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2400)}
@@ -139,7 +139,29 @@
       $("break-hint").textContent = error.message;
     }
   };
-  $("login-btn").onclick=async()=>{try{$("login-error").textContent="";await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch{$("login-error").textContent="بيانات الدخول غير صحيحة"}};
+  templateChanged();
+  $("login-form").onsubmit = async event => {
+    event.preventDefault();
+    const button = $("login-btn");
+    button.disabled = true;
+    button.textContent = "جاري الدخول…";
+    $("login-error").textContent = "";
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
+      if (await hasAdminAccess(user)) $("password").value = "";
+    } catch (error) {
+      const messages = {
+        "auth/invalid-credential": "تحققي من البريد الإلكتروني وكلمة المرور.",
+        "auth/network-request-failed": "تعذر الاتصال بخدمة الدخول. تحققي من اتصال الإنترنت ثم حاولي مرة أخرى.",
+        "auth/too-many-requests": "تم إيقاف المحاولات مؤقتًا. انتظري قليلًا ثم حاولي مرة أخرى.",
+        "auth/user-disabled": "هذا الحساب موقوف.",
+      };
+      $("login-error").textContent = messages[error.code] || "تعذر تسجيل الدخول. حاولي مرة أخرى.";
+    } finally {
+      button.disabled = false;
+      button.textContent = "دخول";
+    }
+  };
   let editVersion;
   $("logout").onclick = () => signOut(auth);
   onAuthStateChanged(auth, async user => {
@@ -149,7 +171,8 @@
     $("login").classList.toggle("hidden", admin);
     $("app").classList.toggle("hidden", !admin);
     $("logout").classList.toggle("hidden", !user);
-    $("login-error").textContent = user && !admin ? "هذا الحساب لا يملك صلاحية الإدارة" : "";
+    $("login-error").textContent = user && !admin ? "هذا الحساب لا يملك صلاحية الإدارة. سجّلي الخروج ثم ادخلي بحساب الإدارة." : "";
+    $("login-btn").disabled = false;
     if (admin) {
       unsubscribe = onSnapshot(collection(db, "academic_plans"), snapshot => {
         plans = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
