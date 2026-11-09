@@ -563,6 +563,7 @@
             name =
               b.semesterName ||
               (b.unitNumber ? `الوحدة ${b.unitNumber}` : b.label),
+            displayName = b.isSemesterBreak ? b.label : name,
             color = b.isSemesterBreak ? "#a855f7" : colors[name],
             filter = b.isSemesterBreak ? "break" : name,
             groupStart = i === 0 || groupKey(blocks[i - 1]) !== key,
@@ -571,7 +572,7 @@
           inView(b.start, b.end).forEach((date) =>
             (map[date] ??= []).push({
               ...b,
-              name,
+              name: displayName,
               color,
               filter,
               isStart: groupStart && date === b.start,
@@ -686,7 +687,7 @@
         detailContent.innerHTML = `<div class="detail-date">${esc(title)}</div>${events
           .map(
             (e) =>
-              `<article class="detail-item" style="--detail-color:${e.color}"><h4>${esc(e.name)}</h4><p>${esc(typeLabel(e))}${e.weekInSemester || e.isSemesterBreak ? ` · الأسبوع ${esc(e.weekInSemester || 6)}` : ""}<br>${esc(e.start)} — ${esc(e.end)}${e.status === "tentative" ? "<br>التاريخ متوقع" : ""}</p></article>`,
+              `<article class="detail-item" style="--detail-color:${e.color}"><h4>${esc(e.name)}</h4><p>${esc(typeLabel(e))}${e.weekInSemester && !e.isSemesterBreak ? ` · الأسبوع ${esc(e.weekInSemester || 6)}` : ""}<br>${esc(e.start)} — ${esc(e.end)}${e.status === "tentative" ? "<br>التاريخ متوقع" : ""}</p></article>`,
           )
           .join("")}`;
         detail.classList.add("show");

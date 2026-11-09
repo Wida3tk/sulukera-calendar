@@ -17,6 +17,10 @@
     .timeline{display:grid;gap:9px}.semester-divider{margin-top:10px;padding:10px 13px;border-radius:11px;background:linear-gradient(90deg,#001442,#0d40fc);color:#fff;font-weight:900}.week{display:grid;grid-template-columns:92px 1fr auto;gap:13px;align-items:center;border:1px solid var(--line);border-radius:13px;padding:11px;background:#fff}.week-num{font-weight:900;color:var(--blue)}.week h4{margin:0 0 3px}.week small{color:var(--muted);direction:ltr;display:inline-block}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:7px}.study .dot{background:#0d40fc}.exam .dot{background:#ff6b35}.break .dot{background:#9c36e8}.course .dot{background:#0ca678}
     .conflicts{margin-top:18px;display:grid;gap:8px}.conflict{padding:11px 13px;border-radius:11px;font-size:13px}.conflict.error{background:#fff0f0;color:#a51111;border:1px solid #ffc9c9}.conflict.warning{background:#fff7e6;color:#8f5100;border:1px solid #ffe0a3}.conflict b{display:block}.ok{padding:13px;background:#e6fcf5;color:#087f5b;border-radius:11px;font-weight:700}
     .saved{margin-top:20px}.saved h2{font-size:19px}.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.plan-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px}.plan-card h3{margin:8px 0 5px;font-size:15px}.plan-card p{margin:0;color:var(--muted);font-size:12px}.mini-actions{display:flex;gap:6px;margin-top:12px}.mini-actions button{border:0;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:11px}.holidays{margin-top:24px}.holiday-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.holiday{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px}.holiday strong{display:block}.holiday small{color:var(--muted)}.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;background:#12b886}.status-dot.tentative{background:#f59f00}
+    #break-settings{margin-bottom:16px;padding:12px;border:1px solid var(--line);border-radius:12px}
+    #break-settings summary{cursor:pointer;font-weight:800;margin-bottom:10px}
+    #break-hint,.resume-hint{color:var(--muted);font-size:13px}
+    #semester-breaks details{padding-top:8px;margin-top:8px;border-top:1px solid var(--line)}
     #login{max-width:420px;margin:80px auto}.login-error{color:var(--red);font-size:12px;min-height:18px}.toast{position:fixed;bottom:25px;left:50%;transform:translate(-50%,20px);opacity:0;background:var(--navy);color:#fff;padding:12px 20px;border-radius:12px;transition:.25s;z-index:50}.toast.show{opacity:1;transform:translate(-50%,0)}
     @media(max-width:900px){.hero,.layout{grid-template-columns:1fr}.plans{grid-template-columns:1fr 1fr}.holiday-grid{grid-template-columns:1fr 1fr}} @media(max-width:560px){header{padding:14px}.brand{font-size:16px}.nav a:first-child{display:none}main{padding:16px 10px}.plans,.holiday-grid{grid-template-columns:1fr}.twocol{grid-template-columns:1fr}.week{grid-template-columns:62px 1fr}.week>span:last-child{display:none}}
   </style>
@@ -33,6 +37,13 @@
       <div id="semester-settings">
         <div class="field"><label>عدد الفصول المتبقية</label><select id="semester-count" class="control"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6" selected>6</option></select></div>
         <div id="semester-names"></div>
+        <details id="break-settings">
+          <summary>الإجازات بين الفصول</summary>
+          <p>حددي آخر يوم في الإجازة. يقترح النظام بدء الفصل التالي في أول أحد بعده، مع مراعاة أسبوع الإجازة بين الفصول.</p>
+          <button type="button" id="suggest-ramadan" class="btn btn-soft">اقترحي إجازة رمضان والعيد 2027</button>
+          <p id="break-hint" role="status"></p>
+          <div id="semester-breaks"></div>
+        </details>
       </div>
       <div class="twocol"><div class="field"><label for="start">تاريخ البداية</label><input id="start" class="control" type="date" required></div><div id="end-field" class="field hidden"><label for="end">تاريخ النهاية</label><input id="end" class="control" type="date"></div></div>
       <div class="twocol"><div class="field"><label>المدرّس</label><input id="instructor" class="control" placeholder="اختياري"></div><div class="field"><label>القاعة / رابط الجلسة</label><input id="room" class="control" placeholder="اختياري"></div></div>
@@ -48,13 +59,86 @@
   import { auth,db } from "./js/firebase.js";
   import { onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { collection,onSnapshot,doc,deleteDoc,getDocsFromServer,runTransaction,query,where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { PROGRAM_TEMPLATES,SAUDI_EVENTS,generatePlan,detectConflicts,shiftPlanAfterHolidays,nextSunday } from "./js/scheduler.js";
+  import { PROGRAM_TEMPLATES,SAUDI_EVENTS,generatePlan,detectConflicts,shiftPlanAfterHolidays,nextSunday,addDays,RAMADAN_BREAK_2027 } from "./js/scheduler.js";
   let plans=[],candidate=null,conflicts=[],editingId=null, unsubscribe, busy=false;
   const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2400)}
   Object.values(PROGRAM_TEMPLATES).forEach(t=>$("template").add(new Option(t.name,t.id)));
-  function renderSemesterNames(names=[]){const count=Number($("semester-count").value);$("semester-names").innerHTML=Array.from({length:count},(_,i)=>`<div class="field"><label>اسم الفصل ${i+1}</label><input class="control semester-name" value="${esc(names[i]||`الفصل ${i+1}`)}" placeholder="مثال: أساسيات القياس"></div>`).join("")}
-  function templateChanged(){const t=PROGRAM_TEMPLATES[$("template").value];$("template-note").textContent=t.description;$("end-field").classList.toggle("hidden",t.id!=="MANUAL");$("semester-settings").classList.toggle("hidden",t.id!=="ABA");if(t.id==="ABA")renderSemesterNames();if(!$("title").value)$("title").placeholder=t.name+" — دفعة جديدة"} $("template").onchange=templateChanged;$("semester-count").onchange=()=>renderSemesterNames([...document.querySelectorAll(".semester-name")].map(input=>input.value));templateChanged();
+  function readBreaks() {
+    return Object.fromEntries([...$("semester-breaks").querySelectorAll("[data-break]")].map(row => [
+      row.dataset.break, { end: row.querySelector("input[type=date]").value, label: row.querySelector("input[type=text]").value },
+    ]));
+  }
+  function updateResumeHints() {
+    $("semester-breaks").querySelectorAll("[data-break]").forEach(row => {
+      const end = row.querySelector("input[type=date]").value;
+      row.querySelector("output").textContent = end
+        ? "الأحد المقترح للعودة: " + nextSunday(addDays(end, 1))
+        : "الإجازة الافتراضية أسبوع واحد.";
+    });
+  }
+  function renderBreaks(breaks = {}) {
+    const count = Number($("semester-count").value);
+    $("break-settings").classList.toggle("hidden", count < 2);
+    $("break-hint").textContent = "";
+    $("semester-breaks").innerHTML = Array.from({ length: count - 1 }, (_, index) => {
+      const semester = index + 1, pause = breaks[semester] || {};
+      return `<details data-break="${semester}" ${pause.end ? "open" : ""}>
+        <summary>إجازة بعد الفصل ${semester}</summary>
+        <div class="field"><label for="break-end-${semester}">آخر يوم في الإجازة</label>
+        <input class="control" id="break-end-${semester}" type="date" value="${esc(pause.end)}"></div>
+        <div class="field"><label for="break-label-${semester}">اسم الإجازة</label>
+        <input class="control" id="break-label-${semester}" type="text" value="${esc(pause.label)}" placeholder="مثال: إجازة رمضان والعيد"></div>
+        <output class="resume-hint"></output></details>`;
+    }).join("");
+    updateResumeHints();
+  }
+  function renderSemesterNames(names = [], breaks = {}) {
+    const count = Number($("semester-count").value);
+    $("semester-names").innerHTML = Array.from({ length: count }, (_, index) =>
+      `<div class="field"><label for="semester-name-${index}">اسم الفصل ${index + 1}</label>
+      <input class="control semester-name" id="semester-name-${index}" value="${esc(names[index] || `الفصل ${index + 1}`)}"></div>`).join("");
+    renderBreaks(breaks);
+  }
+  function templateChanged() {
+    const template = PROGRAM_TEMPLATES[$("template").value];
+    $("template-note").textContent = template.description;
+    $("end-field").classList.toggle("hidden", template.id !== "MANUAL");
+    $("semester-settings").classList.toggle("hidden", template.id !== "ABA");
+    if (template.id === "ABA") renderSemesterNames();
+    $("title").placeholder = template.name + " — دفعة جديدة";
+  }
+  $("template").onchange = templateChanged;
+  $("semester-count").onchange = () => renderSemesterNames(
+    [...document.querySelectorAll(".semester-name")].map(input => input.value), readBreaks());
+  $("semester-breaks").addEventListener("input", updateResumeHints);
+  $("suggest-ramadan").onclick = () => {
+    if (busy) return;
+    try {
+      const breaks = readBreaks();
+      const suggestion = RAMADAN_BREAK_2027;
+      const plan = generatePlan({ templateId: "ABA", startDate: $("start").value,
+        semesterCount: $("semester-count").value, semesterBreaks: breaks });
+      const affected = plan.blocks.find(block => !block.isSemesterBreak &&
+        block.start <= suggestion.end && block.end >= suggestion.start);
+      if (!affected) {
+        $("break-hint").textContent = "الفصول الحالية لا تتداخل مع فترة رمضان والعيد المقدّرة.";
+        return;
+      }
+      const semester = affected.semesterNumber - 1;
+      if (semester < 1) {
+        $("break-hint").textContent = "رمضان يتداخل مع الفصل الأول. جرّبي تقديم البداية أو بدء الدفعة بعد العيد.";
+        return;
+      }
+      if (breaks[semester]?.end && !confirm("استبدال الإجازة المدخلة بالموعد المقترح؟")) return;
+      breaks[semester] = { end: suggestion.end, label: suggestion.label };
+      renderBreaks(breaks);
+      $("semester-breaks").dispatchEvent(new Event("input", { bubbles: true }));
+      $("break-hint").textContent = `اقتُرحت الإجازة بعد الفصل ${semester}. العودة مبدئيًا ${nextSunday(addDays(suggestion.end, 1))}. راجعي التاريخ بعد اعتماد إجازة العيد.`;
+    } catch (error) {
+      $("break-hint").textContent = error.message;
+    }
+  };
   $("login-btn").onclick=async()=>{try{$("login-error").textContent="";await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch{$("login-error").textContent="بيانات الدخول غير صحيحة"}};
   let editVersion;
   $("logout").onclick = () => signOut(auth);
@@ -72,7 +156,7 @@
         renderPlans();
         updateStats();
         if (candidate && !busy) {
-          conflicts = detectConflicts(candidate, plans.filter(plan => plan.visibleToStudents));
+          conflicts = planningConflicts(candidate);
           renderPreview();
         }
       }, () => toast("تعذر قراءة الخطط — راجعي صلاحيات Firestore"));
@@ -88,6 +172,7 @@
     $("title").value = $("instructor").value = $("room").value = $("end").value = "";
     $("start").value = "";
     $("semester-count").value = "6";
+    $("break-settings").open = false;
     $("generate").textContent = "معاينة المواعيد";
     $("preview").className = "panel-body empty";
     $("preview").textContent = "اختاري بيانات البرنامج لمعاينة مواعيده.";
@@ -111,6 +196,7 @@
         templateId: $("template").value, startDate: $("start").value, endDate: $("end").value,
         title, programId: previous?.programId ?? title, instructor: $("instructor").value.trim(),
         room: $("room").value.trim(), semesterCount: $("semester-count").value,
+        semesterBreaks: readBreaks(),
         semesterNames: [...document.querySelectorAll(".semester-name")].map(input => input.value.trim()),
       });
       if (previous) {
@@ -118,7 +204,8 @@
         candidate.createdAt = previous.createdAt ?? candidate.createdAt;
         const sameDates = candidate.templateId === previous.templateId &&
           $("start").value === (previous.requestedStartDate ?? previous.startDate) &&
-          candidate.blocks.length === previous.blocks?.length && candidate.templateId !== "MANUAL";
+          candidate.blocks.length === previous.blocks?.length && candidate.templateId !== "MANUAL" &&
+          JSON.stringify(candidate.semesterBreaks) === JSON.stringify(previous.semesterBreaks ?? {});
         if (sameDates) {
           candidate.blocks.forEach((block, index) => {
             block.start = previous.blocks[index].start;
@@ -129,12 +216,23 @@
         }
       }
       candidate.requestedStartDate = $("start").value;
-      conflicts = detectConflicts(candidate, plans.filter(plan => plan.visibleToStudents));
+      conflicts = planningConflicts(candidate);
       renderPreview();
     } catch (error) { toast(error.message); }
   };
-  function renderPreview(){const hard=conflicts.filter(c=>c.severity==="error").length;let lastSemester=null;const timeline=candidate.blocks.map((b,i)=>{const heading=b.semesterNumber&&!b.isSemesterBreak&&b.semesterNumber!==lastSemester?`<div class="semester-divider">${esc(b.semesterName)}</div>`:"";if(!b.isSemesterBreak&&b.semesterNumber)lastSemester=b.semesterNumber;const weekLabel=candidate.templateId==="MANUAL"?"الفترة":b.weekInSemester?`الأسبوع ${b.weekInSemester}`:`الأسبوع ${i+1}`;return `${heading}<div class="week ${b.type}"><div class="week-num">${weekLabel}</div><div><h4><span class="dot"></span>${esc(b.label)}</h4><small>${esc(b.start)} — ${esc(b.end)}</small></div><span>${esc(b.instructor||"")}</span></div>`}).join("");$("preview").className="panel-body";$("preview").innerHTML=`<div class="plan-title"><div><h2>${esc(candidate.title)}</h2><div class="range">${esc(candidate.startDate)} ← ${esc(candidate.endDate)}${candidate.templateId==='ABA'?` · ${candidate.semesterCount} فصول`:''}</div></div><span class="badge draft">معاينة</span></div><div class="timeline">${timeline}</div><div class="conflicts">${conflicts.length?conflicts.map(c=>`<div class="conflict ${c.severity}"><b>${esc(c.title)}</b>${esc(c.detail)}</div>`).join(""):`<div class="ok">✓ لا توجد تعارضات — الخطة جاهزة</div>`}</div><div class="actions">${candidate.templateId!=="MANUAL"&&conflicts.some(c=>c.kind==="holiday")?`<button id="auto-shift" class="btn btn-soft">ترحيل تلقائي بعد الإجازات</button>`:""}<button id="save-draft" class="btn btn-soft">حفظ كمسودة</button><button id="publish" class="btn btn-green" ${hard?"disabled title='حل التعارضات الحمراء أولًا'":""}>اعتماد ونشر</button></div>`;
-    $("auto-shift")?.addEventListener("click",()=>{candidate=shiftPlanAfterHolidays(candidate);conflicts=detectConflicts(candidate,plans.filter(plan=>plan.visibleToStudents));renderPreview();toast("تم ترحيل الأسابيع المتعارضة")});
+  function planningConflicts(plan) {
+    const issues = detectConflicts(plan, plans.filter(item => item.visibleToStudents));
+    const period = RAMADAN_BREAK_2027;
+    if (plan.templateId === "ABA" && plan.blocks.some(block => !block.isSemesterBreak &&
+      block.start <= period.end && block.end >= period.start)) {
+      issues.unshift({ severity: "warning", kind: "ramadan",
+        title: "تتداخل أسابيع دراسية مع رمضان أو العيد",
+        detail: "إذا كانت الدفعة ستتوقف، استخدمي اقتراح رمضان في «الإجازات بين الفصول» ثم أعيدي المعاينة." });
+    }
+    return issues;
+  }
+  function renderPreview(){const hard=conflicts.filter(c=>c.severity==="error").length;let lastSemester=null;const timeline=candidate.blocks.map((b,i)=>{const heading=b.semesterNumber&&!b.isSemesterBreak&&b.semesterNumber!==lastSemester?`<div class="semester-divider">${esc(b.semesterName)}</div>`:"";if(!b.isSemesterBreak&&b.semesterNumber)lastSemester=b.semesterNumber;const weekLabel=b.isSemesterBreak?"إجازة":candidate.templateId==="MANUAL"?"الفترة":b.weekInSemester?`الأسبوع ${b.weekInSemester}`:`الأسبوع ${i+1}`;return `${heading}<div class="week ${b.type}"><div class="week-num">${weekLabel}</div><div><h4><span class="dot"></span>${esc(b.label)}</h4><small>${esc(b.start)} — ${esc(b.end)}${b.isSemesterBreak&&i<candidate.blocks.length-1?` · العودة ${esc(candidate.blocks[i+1].start)}`:""}</small></div><span>${esc(b.instructor||"")}</span></div>`}).join("");$("preview").className="panel-body";$("preview").innerHTML=`<div class="plan-title"><div><h2>${esc(candidate.title)}</h2><div class="range">${esc(candidate.startDate)} ← ${esc(candidate.endDate)}${candidate.templateId==='ABA'?` · ${candidate.semesterCount} فصول`:''}</div></div><span class="badge draft">معاينة</span></div><div class="timeline">${timeline}</div><div class="conflicts">${conflicts.length?conflicts.map(c=>`<div class="conflict ${c.severity}"><b>${esc(c.title)}</b>${esc(c.detail)}</div>`).join(""):`<div class="ok">✓ لا توجد تعارضات — الخطة جاهزة</div>`}</div><div class="actions">${candidate.templateId!=="MANUAL"&&conflicts.some(c=>c.kind==="holiday")?`<button id="auto-shift" class="btn btn-soft">ترحيل تلقائي بعد الإجازات</button>`:""}<button id="save-draft" class="btn btn-soft">حفظ كمسودة</button><button id="publish" class="btn btn-green" ${hard?"disabled title='حل التعارضات الحمراء أولًا'":""}>اعتماد ونشر</button></div>`;
+    $("auto-shift")?.addEventListener("click",()=>{candidate=shiftPlanAfterHolidays(candidate);conflicts=planningConflicts(candidate);renderPreview();toast("تم ترحيل الأسابيع المتعارضة")});
     $("save-draft").onclick=()=>save("draft");$("publish").onclick=()=>save("published");
   }
   async function writePlan(plan, status, expectedVersion, existing) {
@@ -233,7 +331,8 @@
     templateChanged();
     if (plan.templateId === "ABA") {
       $("semester-count").value = plan.semesterCount || plan.semesterNames?.length || 1;
-      renderSemesterNames(plan.semesterNames || []);
+      renderSemesterNames(plan.semesterNames || [], plan.semesterBreaks);
+      $("break-settings").open = Object.keys(plan.semesterBreaks || {}).length > 0;
     }
     $("generate").textContent = "معاينة التعديلات";
     window.scrollTo({ top: 0, behavior: "smooth" });

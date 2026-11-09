@@ -1,4 +1,9 @@
 export const DAY = 86400000;
+export const RAMADAN_BREAK_2027 = {
+  start: "2027-02-08",
+  end: "2027-03-12",
+  label: "إجازة رمضان وعيد الفطر",
+};
 
 export const PROGRAM_TEMPLATES = {
   MANUAL: {
@@ -63,7 +68,7 @@ export function addDays(value, days) { const d=parseDate(value); d.setDate(d.get
 export function overlaps(aStart,aEnd,bStart,bEnd) { return aStart <= bEnd && bStart <= aEnd; }
 export function nextSunday(value) { const d=parseDate(value), offset=(7-d.getDay())%7; d.setDate(d.getDate()+offset); return formatDate(d); }
 
-export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[], endDate }) {
+export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[], endDate, semesterBreaks={} }) {
   const template = PROGRAM_TEMPLATES[templateId];
   if (!template) throw new Error("قالب البرنامج غير معروف");
   if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || formatDate(parseDate(startDate)) !== startDate) {
@@ -84,6 +89,7 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
     };
   }
   let cursor = startDate;
+  const scheduledBreaks = {};
   const blocks = [];
   const totalSemesters = template.semesters ? Math.max(1,Math.min(template.semesters,Number(semesterCount)||template.semesters)) : 1;
   for (let semester=1; semester<=totalSemesters; semester++) {
@@ -108,21 +114,33 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
       }
     });
     for (let breakWeek=0; breakWeek<(template.breakWeeksAfterSemester||0); breakWeek++) {
-      const start=cursor, end=addDays(cursor,6);
+      const start = cursor;
+      let end = addDays(cursor, 6);
+      const custom = semester < totalSemesters ? semesterBreaks[semester] : undefined;
+      if (custom?.end) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(custom.end) || formatDate(parseDate(custom.end)) !== custom.end) {
+          throw new Error("اختاري تاريخ نهاية إجازة صحيحًا");
+        }
+        const resume = nextSunday(addDays(custom.end, 1));
+        if (resume <= end) throw new Error(`نهاية الإجازة بعد ${semesterName} تسبق موعد الاستئناف المتاح`);
+        end = addDays(resume, -1);
+        scheduledBreaks[semester] = { end: custom.end, label: custom.label?.trim() || "إجازة بين الفصول" };
+      }
       blocks.push({
         id:`${semester}-break-${breakWeek}`,
-        type:"break", label: semester===totalSemesters ? "إجازة نهاية الدفعة" : `إجازة بعد ${semesterName}`,
+        type:"break", label: scheduledBreaks[semester]?.label ?? (semester===totalSemesters ? "إجازة نهاية الدفعة" : `إجازة بعد ${semesterName}`),
         semesterNumber:semester, semesterName, weekInSemester:6, isSemesterBreak:true,
         courseNumber:null,start,end,instructor:"",room:"",
         visibleToStudents:visibility === "published",
       });
-      cursor=addDays(cursor,7);
+      cursor=addDays(end,1);
     }
   }
   return {
     id:globalThis.crypto.randomUUID(),
     templateId, programId:programId || templateId, title:title || template.name,
     semesterCount:template.semesters ? totalSemesters : null,
+    semesterBreaks: scheduledBreaks,
     semesterNames:template.semesters ? Array.from({length:totalSemesters},(_,i)=>String(semesterNames[i]||`الفصل ${i+1}`).trim()) : [],
     status:visibility, visibleToStudents:visibility === "published", startDate,
     endDate:addDays(cursor,-1), blocks, createdAt:new Date().toISOString(),
@@ -164,6 +182,11 @@ export function shiftPlanAfterHolidays(plan, events=SAUDI_EVENTS) {
   let cursor=shifted.startDate;
   shifted.blocks.forEach(block => {
     let start=cursor, end=addDays(start,6), changed=block.type !== "break";
+    const custom = block.isSemesterBreak && shifted.semesterBreaks?.[block.semesterNumber];
+    if (custom) {
+      const plannedEnd = addDays(nextSunday(addDays(custom.end, 1)), -1);
+      if (plannedEnd > end) end = plannedEnd;
+    }
     while(changed){
       changed=false;
       const hit=events.find(e=>e.blocksScheduling && overlaps(start,end,e.start,e.end));
