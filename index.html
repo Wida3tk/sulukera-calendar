@@ -52,6 +52,8 @@
         color: var(--cyan);
         margin: 2px 0 0;
       }
+      .year-picker { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; font-weight: 700; }
+      .year-picker select { font: inherit; color: var(--navy); border: 1px solid #dce4ff; border-radius: 10px; padding: 8px 12px; background: white; }
       .nav {
         margin-right: auto;
         display: flex;
@@ -420,6 +422,10 @@
         <h2>التقويم الأكاديمي</h2>
         <p>تواريخ بداية ونهاية الفصول والاختبارات والإجازات</p>
       </section>
+      <div class="year-picker">
+        <label for="calendar-year">سنة العرض</label>
+        <select id="calendar-year" disabled><option value="2027">2027</option><option value="all">كل السنوات</option></select>
+      </div>
       <div id="app">
         <div class="empty"><b>جاري تحميل البرامج…</b></div>
       </div>
@@ -456,7 +462,8 @@
               "'": "&#39;",
             })[c],
         );
-      let plans = [],
+      let publishedPlans = [],
+        activePlanId,
         active = 0,
         activeFilter = "all",
         currentMap = {};
@@ -514,14 +521,34 @@
           names.map((name, i) => [name, palette[i % palette.length]]),
         );
       }
+      const yearSelect = document.getElementById("calendar-year");
+      yearSelect.onchange = () => {
+        active = 0;
+        activePlanId = undefined;
+        activeFilter = "all";
+        closeDetail();
+        render();
+      };
       function render() {
+        const year = yearSelect.value;
+        const firstDay = year + "-01-01", lastDay = year + "-12-31";
+        const plans = publishedPlans.filter(plan =>
+          year === "all" || (plan.startDate <= lastDay && plan.endDate >= firstDay));
+        renderHolidays(year);
         if (!plans.length) {
           app.innerHTML =
-            '<div class="empty"><b>لا توجد برامج منشورة حاليًا</b>ستظهر البرامج بعد اعتمادها من الإدارة.</div>';
+            '<div class="empty"><b>لا توجد برامج منشورة حاليًا</b>اختاري سنة أخرى أو انتظري نشر البرامج لهذه السنة.</div>';
           return;
         }
-        active = Math.min(active, plans.length - 1);
+        const selected = plans.findIndex(plan => plan.id === activePlanId);
+        if (selected < 0) activeFilter = "all";
+        active = selected < 0 ? 0 : selected;
+        activePlanId = plans[active].id;
         const p = plans[active],
+          rangeStart = year === "all" || p.startDate > firstDay ? p.startDate : firstDay,
+          rangeEnd = year === "all" || p.endDate < lastDay ? p.endDate : lastDay,
+          inView = (start, end) => datesBetween(
+            start > rangeStart ? start : rangeStart, end < rangeEnd ? end : rangeEnd),
           map = {},
           colors = colorGroups(p),
           blocks = p.blocks || [],
@@ -541,7 +568,7 @@
             groupStart = i === 0 || groupKey(blocks[i - 1]) !== key,
             groupEnd =
               i === blocks.length - 1 || groupKey(blocks[i + 1]) !== key;
-          datesBetween(b.start, b.end).forEach((date) =>
+          inView(b.start, b.end).forEach((date) =>
             (map[date] ??= []).push({
               ...b,
               name,
@@ -555,7 +582,7 @@
         SAUDI_EVENTS.filter(
           (e) => e.end >= p.startDate && e.start <= p.endDate,
         ).forEach((e) =>
-          datesBetween(e.start, e.end).forEach((date) =>
+          inView(e.start, e.end).forEach((date) =>
             (map[date] ??= []).push({
               type: "holiday",
               name: e.name,
@@ -572,8 +599,8 @@
         );
         currentMap = map;
         const keys = [];
-        let d = parseDate(p.startDate),
-          end = parseDate(p.endDate);
+        let d = parseDate(rangeStart),
+          end = parseDate(rangeEnd);
         while (d <= end) {
           const k = monthKey(formatDate(d));
           if (!keys.includes(k)) keys.push(k);
@@ -588,11 +615,11 @@
               .join("") +
             item("إجازة بين الفصول", "#a855f7", "break") +
             item("إجازة رسمية", holidayColor, "official");
-        app.innerHTML = `<div class="tabs">${plans.map((x, i) => `<button class="tab ${i === active ? "active" : ""}" data-tab="${i}">${esc(x.title)}</button>`).join("")}</div><div class="plan-info"><div><h3>${esc(p.title)}</h3><p>يبدأ ${p.startDate} · ينتهي ${p.endDate}</p></div></div><div class="color-legend"><h4>اختاري فصلًا لعرض تواريخه فقط، واضغطي على أي يوم ملوّن لعرض التفاصيل</h4><div class="key">${legend}</div></div><div class="months">${keys.map((k) => renderMonth(k, map)).join("")}</div>`;
+        app.innerHTML = `<div class="tabs">${plans.map((x, i) => `<button class="tab ${i === active ? "active" : ""}" data-tab="${i}">${esc(x.title)}</button>`).join("")}</div><div class="plan-info"><div><h3>${esc(p.title)}</h3><p>يبدأ ${esc(p.startDate)} · ينتهي ${esc(p.endDate)}</p></div></div><div class="color-legend"><h4>اختاري فصلًا لعرض تواريخه فقط، واضغطي على أي يوم ملوّن لعرض التفاصيل</h4><div class="key">${legend}</div></div><div class="months">${keys.map((k) => renderMonth(k, map)).join("")}</div>`;
         document.querySelectorAll("[data-tab]").forEach(
           (b) =>
             (b.onclick = () => {
-              active = Number(b.dataset.tab);
+              activePlanId = plans[Number(b.dataset.tab)].id;
               activeFilter = "all";
               render();
             }),
@@ -659,7 +686,7 @@
         detailContent.innerHTML = `<div class="detail-date">${esc(title)}</div>${events
           .map(
             (e) =>
-              `<article class="detail-item" style="--detail-color:${e.color}"><h4>${esc(e.name)}</h4><p>${esc(typeLabel(e))}${e.weekInSemester || e.isSemesterBreak ? ` · الأسبوع ${e.weekInSemester || 6}` : ""}<br>${esc(e.start)} — ${esc(e.end)}${e.status === "tentative" ? "<br>التاريخ متوقع" : ""}</p></article>`,
+              `<article class="detail-item" style="--detail-color:${e.color}"><h4>${esc(e.name)}</h4><p>${esc(typeLabel(e))}${e.weekInSemester || e.isSemesterBreak ? ` · الأسبوع ${esc(e.weekInSemester || 6)}` : ""}<br>${esc(e.start)} — ${esc(e.end)}${e.status === "tentative" ? "<br>التاريخ متوقع" : ""}</p></article>`,
           )
           .join("")}`;
         detail.classList.add("show");
@@ -680,25 +707,38 @@
           where("visibleToStudents", "==", true),
         ),
         (snap) => {
-          plans = snap.docs
-            .map((d) => d.data())
-            .filter((p) => p.status === "published")
+          publishedPlans = snap.docs
+            .map((d) => ({ ...d.data(), id: d.id }))
+            .filter((p) => p.status === "published" && typeof p.startDate === "string" && typeof p.endDate === "string")
             .sort((a, b) => a.startDate.localeCompare(b.startDate));
+          const years = new Set([2027]);
+          publishedPlans.forEach(plan => {
+            const start = parseDate(plan.startDate).getFullYear(), end = parseDate(plan.endDate).getFullYear();
+            for (let year = start; year <= end; year++) years.add(year);
+          });
+          const selectedYear = yearSelect.value;
+          yearSelect.replaceChildren(
+            ...[...years].sort((a, b) => b - a).map(year => new Option(year, year)),
+            new Option("كل السنوات", "all"),
+          );
+          yearSelect.value = [...yearSelect.options].some(option => option.value === selectedYear) ? selectedYear : "2027";
+          yearSelect.disabled = false;
           render();
         },
         () =>
           (app.innerHTML =
             '<div class="empty"><b>تعذر تحميل التقويم</b>راجعي الاتصال.</div>'),
       );
-      const today = new Date().toISOString().slice(0, 10);
+      function renderHolidays(year) {
       document.getElementById("holidays").innerHTML = SAUDI_EVENTS.filter(
-        (e) => e.end >= today,
+        (e) => year === "all" || e.start.startsWith(year + "-"),
       )
         .map((e) => {
           const detail = `${e.name}\n${e.start}${e.end !== e.start ? " — " + e.end : ""}\n${e.status === "tentative" ? "متوقع — بانتظار الإعلان الرسمي" : "تاريخ مؤكد"}`;
           return `<span class="holiday-pill" data-tooltip="${esc(detail)}">${esc(e.name)} · ${e.start}${e.status === "tentative" ? " (متوقع)" : ""}</span>`;
         })
-        .join("");
+        .join("") || "لا توجد إجازات مسجّلة لهذه السنة.";
+      }
     </script>
   </body>
 </html>

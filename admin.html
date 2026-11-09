@@ -7,8 +7,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
 
   <script type="module">
+    import { hasAdminAccess, escapeHtml } from "./js/ui.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection }
+    import { getFirestore, doc, setDoc, updateDoc, getDoc, onSnapshot, collection }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -59,15 +60,20 @@
     // ═══════════════════════════════════════
     // Auth
     // ═══════════════════════════════════════
-    onAuthStateChanged(auth, user => {
-      if (user) {
+    let unsubscribeDashboard;
+    onAuthStateChanged(auth, async user => {
+      unsubscribeDashboard?.();
+      const admin = await hasAdminAccess(user);
+      if (auth.currentUser !== user) return;
+      if (admin) {
         document.getElementById("login-screen").style.display = "none";
         document.getElementById("dashboard").style.display   = "block";
         document.getElementById("user-email").textContent    = user.email;
-        loadDashboard();
+        loadDashboard(user).catch(() => showToast("تعذر تحميل التقاويم", "error"));
       } else {
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("dashboard").style.display   = "none";
+        if (user) document.getElementById("login-error").textContent = "هذا الحساب لا يملك صلاحية الإدارة";
       }
     });
 
@@ -78,7 +84,8 @@
       const err   = document.getElementById("login-error");
       err.textContent = ""; btn.disabled = true; btn.textContent = "جاري الدخول...";
       try { await signInWithEmailAndPassword(auth, email, pass); }
-      catch { err.textContent = "البريد أو كلمة السر غير صحيحة"; btn.disabled=false; btn.textContent="دخول"; }
+      catch { err.textContent = "البريد أو كلمة السر غير صحيحة"; }
+      finally { btn.disabled=false; btn.textContent="دخول"; }
     };
     window.doLogout = () => signOut(auth);
     document.addEventListener("DOMContentLoaded", () => {
@@ -88,17 +95,18 @@
     // ═══════════════════════════════════════
     // Dashboard
     // ═══════════════════════════════════════
-    async function loadDashboard() {
+    async function loadDashboard(user) {
       for (const p of ALL_PROGRAMS) {
         const ref = doc(db,"calendars",p.id);
         const snap = await getDoc(ref);
         if (!snap.exists()) await setDoc(ref,{visible:false,nameAr:p.nameAr,notes:"",events:{}});
       }
-      onSnapshot(collection(db,"calendars"), snap => {
+      if (auth.currentUser !== user) return;
+      unsubscribeDashboard = onSnapshot(collection(db,"calendars"), snap => {
         allData = {};
         snap.forEach(d => { allData[d.id] = d.data(); });
         renderList();
-      });
+      }, () => showToast("تعذر تحميل التقاويم", "error"));
     }
 
     function renderList() {
@@ -138,7 +146,7 @@
             <div class="notes-row">
               <input class="notes-input" id="notes-${p.id}" type="text"
                 placeholder="ملاحظة للطلاب..."
-                value="${(s.notes||"").replace(/"/g,"&quot;")}"
+                value="${escapeHtml((s.notes||""))}"
                 onblur="saveNote('${p.id}')"
                 onkeydown="if(event.key==='Enter') saveNote('${p.id}')" />
               <button class="save-note-btn" onclick="saveNote('${p.id}')">حفظ</button>
@@ -277,7 +285,7 @@
       btn.disabled=true; btn.textContent="جاري الحفظ...";
       try {
         const saveKey = currentEditorYear === 2027 ? "events_2027" : "events";
-        await setDoc(doc(db,"calendars",currentProgram),{[saveKey]:currentEvents, lastUpdated: new Date().toISOString()},{merge:true});
+        await updateDoc(doc(db,"calendars",currentProgram), {[saveKey]: currentEvents, lastUpdated: new Date().toISOString()});
         showToast("✓ تم حفظ التقويم بنجاح");
         btn.textContent="✓ محفوظ";
         setTimeout(()=>{ btn.disabled=false; btn.textContent="حفظ التغييرات"; },2000);
@@ -304,7 +312,7 @@
     window.openPhases = progId => {
       currentPhasesId = progId;
       const s = allData[progId] || {};
-      currentPhases = JSON.parse(JSON.stringify(s.phases || []));
+      currentPhases = (s.phases || []).map((phase, index) => ({ ...phase, id: phase.id ?? String(index) }));
       const p = ALL_PROGRAMS.find(x => x.id === progId);
       document.getElementById("phases-title").textContent = `فصول: ${p.nameAr}`;
       document.getElementById("phases-overlay").style.display = "flex";
@@ -329,19 +337,19 @@
           <div class="phase-fields">
             <input class="phase-input phase-label-input" type="text"
               placeholder="اسم الفصل (مثل: الفصل الأول)"
-              value="${(ph.label||"").replace(/"/g,"&quot;")}"
+              value="${escapeHtml((ph.label||""))}"
               oninput="updatePhase(${i},'label',this.value)" />
             <div class="phase-dates">
               <div class="phase-date-group">
                 <label>من</label>
                 <input class="phase-input phase-date-input" type="date"
-                  value="${ph.from||""}"
+                  value="${escapeHtml(ph.from||"")}"
                   oninput="updatePhase(${i},'from',this.value)" />
               </div>
               <div class="phase-date-group">
                 <label>إلى</label>
                 <input class="phase-input phase-date-input" type="date"
-                  value="${ph.to||""}"
+                  value="${escapeHtml(ph.to||"")}"
                   oninput="updatePhase(${i},'to',this.value)" />
               </div>
             </div>
@@ -355,7 +363,7 @@
     };
 
     window.addPhase = () => {
-      currentPhases.push({ label: "", from: "", to: "" });
+      currentPhases.push({ id: crypto.randomUUID(), label: "", from: "", to: "" });
       renderPhasesList();
       // scroll to bottom
       const list = document.getElementById("phases-list");

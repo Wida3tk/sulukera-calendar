@@ -1,35 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+    function isAdmin() { return request.auth != null && request.auth.token.admin == true; }
+
+    match /planner_state/publication {
+      allow read, write: if isAdmin();
+    }
 
     match /calendars/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
     match /academic_plans/{id} {
-      allow read: if signedIn() || resource.data.visibleToStudents == true;
-      allow create, update, delete: if signedIn();
+      allow read: if isAdmin() || resource.data.visibleToStudents == true;
+      allow create, update, delete: if isAdmin();
     }
     match /schedules/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
     match /subjects/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
     match /instructors/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
     match /savethedate/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
     match /system_events/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
   }
 }

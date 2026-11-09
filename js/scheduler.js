@@ -1,6 +1,12 @@
 export const DAY = 86400000;
 
 export const PROGRAM_TEMPLATES = {
+  MANUAL: {
+    id: "MANUAL",
+    name: "برنامج بتواريخ محددة",
+    description: "أدخلي تاريخ البداية والنهاية للبرامج القصيرة أو المواعيد المحددة.",
+    blocks: [],
+  },
   ABA: {
     id: "ABA",
     name: "تحليل السلوك التطبيقي",
@@ -57,11 +63,26 @@ export function addDays(value, days) { const d=parseDate(value); d.setDate(d.get
 export function overlaps(aStart,aEnd,bStart,bEnd) { return aStart <= bEnd && bStart <= aEnd; }
 export function nextSunday(value) { const d=parseDate(value), offset=(7-d.getDay())%7; d.setDate(d.getDate()+offset); return formatDate(d); }
 
-export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[] }) {
+export function generatePlan({ templateId, startDate, title, programId, instructor="", room="", visibility="draft", semesterCount, semesterNames=[], endDate }) {
   const template = PROGRAM_TEMPLATES[templateId];
   if (!template) throw new Error("قالب البرنامج غير معروف");
-  if (!startDate) throw new Error("تاريخ البداية مطلوب");
+  if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || formatDate(parseDate(startDate)) !== startDate) {
+    throw new Error("اختاري تاريخ بداية صحيحًا");
+  }
   if (template.semesters) startDate = nextSunday(startDate);
+  if (templateId === "MANUAL") {
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) ||
+        formatDate(parseDate(endDate)) !== endDate || endDate < startDate) {
+      throw new Error("اختاري تاريخ نهاية يساوي تاريخ البداية أو يأتي بعده");
+    }
+    return {
+      id: globalThis.crypto.randomUUID(), templateId, programId: programId || title,
+      title, startDate, endDate, status: visibility, visibleToStudents: visibility === "published",
+      blocks: [{ id: "manual", type: "course", label: title, start: startDate, end: endDate,
+        instructor, room, visibleToStudents: visibility === "published" }],
+      createdAt: new Date().toISOString(),
+    };
+  }
   let cursor = startDate;
   const blocks = [];
   const totalSemesters = template.semesters ? Math.max(1,Math.min(template.semesters,Number(semesterCount)||template.semesters)) : 1;
@@ -99,7 +120,7 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
     }
   }
   return {
-    id:`${programId || templateId}-${Date.now()}`,
+    id:globalThis.crypto.randomUUID(),
     templateId, programId:programId || templateId, title:title || template.name,
     semesterCount:template.semesters ? totalSemesters : null,
     semesterNames:template.semesters ? Array.from({length:totalSemesters},(_,i)=>String(semesterNames[i]||`الفصل ${i+1}`).trim()) : [],
@@ -110,7 +131,8 @@ export function generatePlan({ templateId, startDate, title, programId, instruct
 
 export function detectConflicts(candidate, plans=[], events=SAUDI_EVENTS) {
   const conflicts=[];
-  candidate.blocks.forEach(block => {
+  (candidate.blocks || []).forEach(block => {
+    if (block.type === "break") return;
     events.filter(e=>e.blocksScheduling && overlaps(block.start,block.end,e.start,e.end)).forEach(e=>conflicts.push({
       severity:"warning", kind:"holiday", blockId:block.id,
       title:`${block.label} يتقاطع مع ${e.name}`,
@@ -118,7 +140,7 @@ export function detectConflicts(candidate, plans=[], events=SAUDI_EVENTS) {
       eventId:e.id,
     }));
     plans.filter(p=>p.id!==candidate.id).forEach(plan => (plan.blocks||[]).forEach(other => {
-      if (!overlaps(block.start,block.end,other.start,other.end)) return;
+      if (other.type === "break" || !overlaps(block.start,block.end,other.start,other.end)) return;
       if (block.instructor && other.instructor && block.instructor.trim()===other.instructor.trim()) conflicts.push({
         severity:"error",kind:"instructor",blockId:block.id,
         title:`تعارض المدرّس ${block.instructor}`,detail:`مع ${plan.title}: ${other.label}`,
@@ -137,14 +159,20 @@ export function detectConflicts(candidate, plans=[], events=SAUDI_EVENTS) {
 }
 
 export function shiftPlanAfterHolidays(plan, events=SAUDI_EVENTS) {
+  if (plan.templateId === "MANUAL") return structuredClone(plan);
   const shifted=structuredClone(plan);
   let cursor=shifted.startDate;
   shifted.blocks.forEach(block => {
-    let start=cursor, end=addDays(start,6), changed=true;
+    let start=cursor, end=addDays(start,6), changed=block.type !== "break";
     while(changed){
       changed=false;
       const hit=events.find(e=>e.blocksScheduling && overlaps(start,end,e.start,e.end));
-      if(hit){ start=addDays(hit.end,1); end=addDays(start,6); changed=true; }
+      if(hit){
+        start=addDays(hit.end,1);
+        if (plan.templateId === "ABA") start=nextSunday(start);
+        end=addDays(start,6);
+        changed=true;
+      }
     }
     block.start=start; block.end=end; cursor=addDays(end,1);
   });

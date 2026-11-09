@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <script type="module">
+    import { hasAdminAccess } from "./js/ui.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -59,8 +60,10 @@
     let stdData    = {}; // save-the-date data from Firebase
 
     // ── Auth ──
-    onAuthStateChanged(auth, user => {
-      isAdmin = !!user;
+    onAuthStateChanged(auth, async user => {
+      const admin = await hasAdminAccess(user);
+      if (auth.currentUser !== user) return;
+      isAdmin = admin;
       document.getElementById("admin-bar").style.display = isAdmin ? "flex" : "none";
       document.getElementById("login-fab").style.display = isAdmin ? "none" : "flex";
     });
@@ -71,7 +74,11 @@
       const err = document.getElementById("fab-err");
       err.textContent = "";
       try {
-        await signInWithEmailAndPassword(auth, e, p);
+        const { user } = await signInWithEmailAndPassword(auth, e, p);
+        if (!await hasAdminAccess(user)) {
+          err.textContent = "هذا الحساب لا يملك صلاحية الإدارة";
+          return;
+        }
         document.getElementById("login-popup").style.display = "none";
       } catch {
         err.textContent = "بيانات خاطئة";

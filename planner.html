@@ -22,11 +22,11 @@
   </style>
 </head>
 <body>
-<header><div class="brand">سلوكيرا <small>ACADEMIC OPERATIONS</small></div><div class="nav"><a href="index.html">تقويم الطلاب</a><a href="schedule.html">الجداول</a></div></header>
+<header><div class="brand">سلوكيرا <small>ACADEMIC OPERATIONS</small></div><div class="nav"><a href="index.html">تقويم الطلاب</a><a href="schedule.html">الجداول</a><a href="admin.html">التقاويم السابقة</a><button id="logout" class="btn btn-soft hidden">خروج</button></div></header>
 <main>
   <section id="login" class="panel"><div class="panel-head"><h2>دخول الإدارة</h2><p>مخطط البرامج محمي بحساب Firebase</p></div><div class="panel-body"><div class="field"><label>البريد الإلكتروني</label><input id="email" class="control" type="email"></div><div class="field"><label>كلمة السر</label><input id="password" class="control" type="password"></div><div id="login-error" class="login-error"></div><button id="login-btn" class="btn btn-primary">دخول</button></div></section>
   <div id="app" class="hidden">
-    <section class="hero"><div class="hero-card"><h1>مخطط البرامج الذكي</h1><p>ابني البرنامج من قالب، افحص التعارضات، ثم انشري النسخة المعتمدة للطلاب.</p></div><div class="stats"><div class="stat"><b id="stat-plans">0</b>خطة</div><div class="stat"><b id="stat-conflicts">0</b>تنبيه نشط</div><div class="stat"><b id="stat-published">0</b>منشور</div><div class="stat"><b id="stat-holidays">0</b>مناسبة سعودية</div></div></section>
+    <section class="hero"><div class="hero-card"><h1>إدارة برامج 2027</h1><p>اختاري القالب، حددي المواعيد، وراجعي التقويم قبل نشره للطلاب.</p></div><div class="stats"><div class="stat"><b id="stat-plans">0</b>خطة</div><div class="stat"><b id="stat-conflicts">0</b>تنبيه نشط</div><div class="stat"><b id="stat-published">0</b>منشور</div><div class="stat"><b id="stat-holidays">0</b>مناسبة سعودية</div></div></section>
     <section class="layout"><aside class="panel"><div class="panel-head"><h2>إنشاء خطة جديدة</h2><p>اختاري القالب وتاريخ البداية؛ النظام يبني الباقي.</p></div><div class="panel-body">
       <div class="field"><label>قالب البرنامج</label><select id="template" class="control"></select></div><div id="template-note" class="template-note"></div>
       <div class="field"><label>اسم البرنامج / الدفعة</label><input id="title" class="control" placeholder="مثال: تحليل السلوك — دفعة سبتمبر"></div>
@@ -34,68 +34,220 @@
         <div class="field"><label>عدد الفصول المتبقية</label><select id="semester-count" class="control"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6" selected>6</option></select></div>
         <div id="semester-names"></div>
       </div>
-      <div class="twocol"><div class="field"><label>تاريخ البداية</label><input id="start" class="control" type="date"></div><div class="field"><label>الحالة</label><select id="visibility" class="control"><option value="draft">مسودة للإدارة</option><option value="published">منشور للطلاب</option></select></div></div>
+      <div class="twocol"><div class="field"><label for="start">تاريخ البداية</label><input id="start" class="control" type="date" required></div><div id="end-field" class="field hidden"><label for="end">تاريخ النهاية</label><input id="end" class="control" type="date"></div></div>
       <div class="twocol"><div class="field"><label>المدرّس</label><input id="instructor" class="control" placeholder="اختياري"></div><div class="field"><label>القاعة / رابط الجلسة</label><input id="room" class="control" placeholder="اختياري"></div></div>
-      <button id="generate" class="btn btn-primary">توليد الخطة وفحصها</button>
+      <div class="actions"><button id="generate" class="btn btn-primary">معاينة المواعيد</button><button id="reset-form" class="btn btn-soft">خطة جديدة</button></div>
     </div></aside>
     <article class="panel"><div class="panel-head"><h2>المعاينة والتعارضات</h2><p>لن تُحفظ أي خطة قبل مراجعتك.</p></div><div id="preview" class="panel-body empty"><div class="icon">⚡</div><p>الخطة الذكية ستظهر هنا</p></div></article></section>
-    <section class="saved"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h2>البرامج التي أضفتها</h2><button id="clear-plans" class="btn" style="background:#fff0f0;color:#c92a2a">حذف جميع الخطط</button></div><div id="plans" class="plans"></div></section>
+    <section class="saved"><div class="actions"><h2>الخطط المحفوظة</h2><select id="plan-year" class="control" aria-label="سنة بداية الخطة"><option value="2027">بداية في 2027</option><option value="all">كل السنوات</option></select></div><div id="plans" class="plans"></div></section>
     <section class="holidays"><h2>تقويم السعودية المركزي</h2><div id="holidays" class="holiday-grid"></div></section>
   </div>
-</main><div id="toast" class="toast"></div>
+</main><div id="toast" class="toast" role="status"></div>
 <script type="module">
+  import { hasAdminAccess } from "./js/ui.js";
   import { auth,db } from "./js/firebase.js";
-  import { onAuthStateChanged,signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { collection,onSnapshot,doc,setDoc,deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { collection,onSnapshot,doc,deleteDoc,getDocsFromServer,runTransaction,query,where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { PROGRAM_TEMPLATES,SAUDI_EVENTS,generatePlan,detectConflicts,shiftPlanAfterHolidays,nextSunday } from "./js/scheduler.js";
-  let plans=[],candidate=null,conflicts=[],editingId=null;
+  let plans=[],candidate=null,conflicts=[],editingId=null, unsubscribe, busy=false;
   const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2400)}
-  Object.values(PROGRAM_TEMPLATES).forEach(t=>$("template").add(new Option(t.name,t.id))); $("start").value=new Date().toISOString().slice(0,10);
+  Object.values(PROGRAM_TEMPLATES).forEach(t=>$("template").add(new Option(t.name,t.id)));
   function renderSemesterNames(names=[]){const count=Number($("semester-count").value);$("semester-names").innerHTML=Array.from({length:count},(_,i)=>`<div class="field"><label>اسم الفصل ${i+1}</label><input class="control semester-name" value="${esc(names[i]||`الفصل ${i+1}`)}" placeholder="مثال: أساسيات القياس"></div>`).join("")}
-  function templateChanged(){const t=PROGRAM_TEMPLATES[$("template").value];$("template-note").textContent=t.description;$("semester-settings").classList.toggle("hidden",t.id!=="ABA");if(t.id==="ABA")renderSemesterNames();if(!$("title").value)$("title").placeholder=t.name+" — دفعة جديدة"} $("template").onchange=templateChanged;$("semester-count").onchange=renderSemesterNames;templateChanged();
+  function templateChanged(){const t=PROGRAM_TEMPLATES[$("template").value];$("template-note").textContent=t.description;$("end-field").classList.toggle("hidden",t.id!=="MANUAL");$("semester-settings").classList.toggle("hidden",t.id!=="ABA");if(t.id==="ABA")renderSemesterNames();if(!$("title").value)$("title").placeholder=t.name+" — دفعة جديدة"} $("template").onchange=templateChanged;$("semester-count").onchange=()=>renderSemesterNames([...document.querySelectorAll(".semester-name")].map(input=>input.value));templateChanged();
   $("login-btn").onclick=async()=>{try{$("login-error").textContent="";await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch{$("login-error").textContent="بيانات الدخول غير صحيحة"}};
-  onAuthStateChanged(auth,user=>{ $("login").classList.toggle("hidden",!!user);$("app").classList.toggle("hidden",!user);if(user)listen() });
-  function listen(){onSnapshot(collection(db,"academic_plans"),snap=>{plans=snap.docs.map(d=>({id:d.id,...d.data()}));renderPlans();updateStats()},()=>toast("تعذر قراءة الخطط — راجعي صلاحيات Firestore"))}
-  $("generate").onclick=()=>{try{const title=$("title").value.trim();if(!title)throw new Error("اكتبي اسم البرنامج أو الدفعة");const semesterNames=[...document.querySelectorAll(".semester-name")].map(x=>x.value.trim());if($("template").value==="ABA"&&semesterNames.some(x=>!x))throw new Error("اكتبي اسم كل فصل");const chosenStart=$("start").value,sunday=$("template").value==="ABA"?nextSunday(chosenStart):chosenStart;if(sunday!==chosenStart){$("start").value=sunday;toast(`تم تعديل البداية إلى الأحد ${sunday}`)}candidate=generatePlan({templateId:$("template").value,startDate:sunday,title,programId:title,instructor:$("instructor").value.trim(),room:$("room").value.trim(),visibility:$("visibility").value,semesterCount:$("semester-count").value,semesterNames});if(editingId)candidate.id=editingId;conflicts=detectConflicts(candidate,plans);renderPreview()}catch(e){toast(e.message)}};
-  function renderPreview(){const hard=conflicts.filter(c=>c.severity==="error").length;let lastSemester=null;const timeline=candidate.blocks.map((b,i)=>{const heading=b.semesterNumber&&!b.isSemesterBreak&&b.semesterNumber!==lastSemester?`<div class="semester-divider">${esc(b.semesterName)} · 6 أسابيع</div>`:"";if(!b.isSemesterBreak&&b.semesterNumber)lastSemester=b.semesterNumber;const weekLabel=b.weekInSemester?`الأسبوع ${b.weekInSemester}`:`الأسبوع ${i+1}`;return `${heading}<div class="week ${b.type}"><div class="week-num">${weekLabel}</div><div><h4><span class="dot"></span>${esc(b.label)}</h4><small>${b.start} — ${b.end}</small></div><span>${esc(b.instructor||"")}</span></div>`}).join("");$("preview").className="panel-body";$("preview").innerHTML=`<div class="plan-title"><div><h2>${esc(candidate.title)}</h2><div class="range">${candidate.startDate} ← ${candidate.endDate}${candidate.templateId==='ABA'?` · ${candidate.semesterCount} فصول`:''}</div></div><span class="badge ${candidate.status}">${candidate.status==="published"?"منشور":"مسودة"}</span></div><div class="timeline">${timeline}</div><div class="conflicts">${conflicts.length?conflicts.map(c=>`<div class="conflict ${c.severity}"><b>${esc(c.title)}</b>${esc(c.detail)}</div>`).join(""):`<div class="ok">✓ لا توجد تعارضات — الخطة جاهزة</div>`}</div><div class="actions">${conflicts.some(c=>c.kind==="holiday")?`<button id="auto-shift" class="btn btn-soft">ترحيل تلقائي بعد الإجازات</button>`:""}<button id="save-draft" class="btn btn-soft">حفظ كمسودة</button><button id="publish" class="btn btn-green" ${hard?"disabled title='حل التعارضات الحمراء أولًا'":""}>اعتماد ونشر</button></div>`;
-    $("auto-shift")?.addEventListener("click",()=>{candidate=shiftPlanAfterHolidays(candidate);conflicts=detectConflicts(candidate,plans);renderPreview();toast("تم ترحيل الأسابيع المتعارضة")});
+  let editVersion;
+  $("logout").onclick = () => signOut(auth);
+  onAuthStateChanged(auth, async user => {
+    unsubscribe?.();
+    const admin = await hasAdminAccess(user);
+    if (auth.currentUser !== user) return;
+    $("login").classList.toggle("hidden", admin);
+    $("app").classList.toggle("hidden", !admin);
+    $("logout").classList.toggle("hidden", !user);
+    $("login-error").textContent = user && !admin ? "هذا الحساب لا يملك صلاحية الإدارة" : "";
+    if (admin) {
+      unsubscribe = onSnapshot(collection(db, "academic_plans"), snapshot => {
+        plans = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
+        renderPlans();
+        updateStats();
+        if (candidate && !busy) {
+          conflicts = detectConflicts(candidate, plans.filter(plan => plan.visibleToStudents));
+          renderPreview();
+        }
+      }, () => toast("تعذر قراءة الخطط — راجعي صلاحيات Firestore"));
+    } else {
+      plans = [];
+      resetForm();
+    }
+  });
+
+  function resetForm() {
+    candidate = null;
+    editingId = null;
+    $("title").value = $("instructor").value = $("room").value = $("end").value = "";
+    $("start").value = "";
+    $("semester-count").value = "6";
+    $("generate").textContent = "معاينة المواعيد";
+    $("preview").className = "panel-body empty";
+    $("preview").textContent = "اختاري بيانات البرنامج لمعاينة مواعيده.";
+    templateChanged();
+  }
+  $("reset-form").onclick = () => { if (!busy) resetForm(); };
+  $("plan-year").onchange = () => { renderPlans(); updateStats(); };
+  document.querySelector(".layout aside").addEventListener("input", () => {
+    if (busy || !candidate) return;
+    candidate = null;
+    $("preview").className = "panel-body empty";
+    $("preview").textContent = "تغيّرت البيانات. اضغطي «معاينة المواعيد» لتحديث الخطة.";
+  });
+  $("generate").onclick = () => {
+    if (busy) return;
+    try {
+      const title = $("title").value.trim();
+      if (!title) throw new Error("اكتبي اسم البرنامج أو الدفعة");
+      const previous = plans.find(plan => plan.id === editingId);
+      candidate = generatePlan({
+        templateId: $("template").value, startDate: $("start").value, endDate: $("end").value,
+        title, programId: previous?.programId ?? title, instructor: $("instructor").value.trim(),
+        room: $("room").value.trim(), semesterCount: $("semester-count").value,
+        semesterNames: [...document.querySelectorAll(".semester-name")].map(input => input.value.trim()),
+      });
+      if (previous) {
+        candidate.id = previous.id;
+        candidate.createdAt = previous.createdAt ?? candidate.createdAt;
+        const sameDates = candidate.templateId === previous.templateId &&
+          $("start").value === (previous.requestedStartDate ?? previous.startDate) &&
+          candidate.blocks.length === previous.blocks?.length && candidate.templateId !== "MANUAL";
+        if (sameDates) {
+          candidate.blocks.forEach((block, index) => {
+            block.start = previous.blocks[index].start;
+            block.end = previous.blocks[index].end;
+          });
+          candidate.startDate = previous.startDate;
+          candidate.endDate = previous.endDate;
+        }
+      }
+      candidate.requestedStartDate = $("start").value;
+      conflicts = detectConflicts(candidate, plans.filter(plan => plan.visibleToStudents));
+      renderPreview();
+    } catch (error) { toast(error.message); }
+  };
+  function renderPreview(){const hard=conflicts.filter(c=>c.severity==="error").length;let lastSemester=null;const timeline=candidate.blocks.map((b,i)=>{const heading=b.semesterNumber&&!b.isSemesterBreak&&b.semesterNumber!==lastSemester?`<div class="semester-divider">${esc(b.semesterName)}</div>`:"";if(!b.isSemesterBreak&&b.semesterNumber)lastSemester=b.semesterNumber;const weekLabel=candidate.templateId==="MANUAL"?"الفترة":b.weekInSemester?`الأسبوع ${b.weekInSemester}`:`الأسبوع ${i+1}`;return `${heading}<div class="week ${b.type}"><div class="week-num">${weekLabel}</div><div><h4><span class="dot"></span>${esc(b.label)}</h4><small>${esc(b.start)} — ${esc(b.end)}</small></div><span>${esc(b.instructor||"")}</span></div>`}).join("");$("preview").className="panel-body";$("preview").innerHTML=`<div class="plan-title"><div><h2>${esc(candidate.title)}</h2><div class="range">${esc(candidate.startDate)} ← ${esc(candidate.endDate)}${candidate.templateId==='ABA'?` · ${candidate.semesterCount} فصول`:''}</div></div><span class="badge draft">معاينة</span></div><div class="timeline">${timeline}</div><div class="conflicts">${conflicts.length?conflicts.map(c=>`<div class="conflict ${c.severity}"><b>${esc(c.title)}</b>${esc(c.detail)}</div>`).join(""):`<div class="ok">✓ لا توجد تعارضات — الخطة جاهزة</div>`}</div><div class="actions">${candidate.templateId!=="MANUAL"&&conflicts.some(c=>c.kind==="holiday")?`<button id="auto-shift" class="btn btn-soft">ترحيل تلقائي بعد الإجازات</button>`:""}<button id="save-draft" class="btn btn-soft">حفظ كمسودة</button><button id="publish" class="btn btn-green" ${hard?"disabled title='حل التعارضات الحمراء أولًا'":""}>اعتماد ونشر</button></div>`;
+    $("auto-shift")?.addEventListener("click",()=>{candidate=shiftPlanAfterHolidays(candidate);conflicts=detectConflicts(candidate,plans.filter(plan=>plan.visibleToStudents));renderPreview();toast("تم ترحيل الأسابيع المتعارضة")});
     $("save-draft").onclick=()=>save("draft");$("publish").onclick=()=>save("published");
   }
-  async function save(status){
-    if(!candidate)return;
-    const buttons=[$("save-draft"),$("publish")].filter(Boolean),labels=buttons.map(b=>b.textContent);
-    buttons.forEach(b=>b.disabled=true);
-    const targetButton=status==="published"?$("publish"):$("save-draft");
-    if(targetButton)targetButton.textContent="جاري الحفظ…";
-    try{
-      const payload=structuredClone(candidate);
-      payload.status=status;payload.visibleToStudents=status==="published";
-      payload.blocks.forEach(b=>b.visibleToStudents=payload.visibleToStudents);
-      payload.updatedAt=new Date().toISOString();
-      await setDoc(doc(db,"academic_plans",payload.id),payload);
-      candidate=payload;
-      toast(status==="published"?"✓ تم اعتماد الخطة ونشرها للطلاب":"✓ تم حفظ المسودة");
-      candidate=null;editingId=null;$("generate").textContent="توليد الخطة وفحصها";$("preview").className="panel-body empty";$("preview").innerHTML="<div class='icon'>✓</div><p>تم الحفظ بنجاح</p>";
-    }catch(error){
-      console.error("Saving academic plan failed",error);
-      const denied=error?.code==="permission-denied"||String(error?.message||"").includes("permission");
-      toast(denied?"تعذر الحفظ: قواعد Firebase لم تُفعّل بعد":"تعذر الحفظ — حاولي مجددًا");
-      const box=document.createElement("div");box.className="conflict error";box.style.marginTop="12px";
-      box.innerHTML=denied?"<b>الحفظ مرفوض من Firebase</b>يجب نشر قواعد Firestore الجديدة مرة واحدة، ثم إعادة المحاولة.":`<b>حدث خطأ أثناء الحفظ</b>${esc(error?.message||"خطأ غير معروف")}`;
-      $("preview").appendChild(box);
-    }finally{
-      buttons.forEach((b,i)=>{b.disabled=false;b.textContent=labels[i]});
+  async function writePlan(plan, status, expectedVersion, existing) {
+    const planRef = doc(db, "academic_plans", plan.id);
+    // Publishing from different browsers must use the same revision document.
+    const lock = doc(db, "planner_state", "publication");
+    const visibleToStudents = status === "published";
+    const payload = { ...plan, status, visibleToStudents, updatedAt: new Date().toISOString(),
+      blocks: plan.blocks.map(block => ({ ...block, visibleToStudents })) };
+    await runTransaction(db, async transaction => {
+      await transaction.get(lock);
+      const current = await transaction.get(planRef);
+      if (existing !== current.exists() || (existing && current.data().updatedAt !== expectedVersion)) {
+        throw new Error("تغيّرت الخطة منذ فتحها. افتحي أحدث نسخة ثم أعيدي المحاولة.");
+      }
+      if (visibleToStudents) {
+        const snapshot = await getDocsFromServer(query(collection(db, "academic_plans"),
+          where("visibleToStudents", "==", true)));
+        const published = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
+        const conflict = detectConflicts(payload, published).find(item => item.severity === "error");
+        if (conflict) throw new Error(conflict.title + " — " + conflict.detail);
+      }
+      transaction.set(planRef, payload);
+      transaction.set(lock, { revision: crypto.randomUUID() });
+    });
+  }
+
+  async function save(status) {
+    if (!candidate || busy) return;
+    busy = true;
+    const buttons = [...$("preview").querySelectorAll("button")];
+    buttons.forEach(button => button.disabled = true);
+    try {
+      await writePlan(candidate, status, editVersion, !!editingId);
+      resetForm();
+      toast(status === "published" ? "تم نشر الخطة للطلاب" : "تم حفظ المسودة");
+    } catch (error) {
+      toast(error.code === "permission-denied" ? "تعذر الحفظ. تحققي من صلاحيات الإدارة وقواعد Firebase." : error.message);
+    } finally {
+      busy = false;
+      buttons.forEach(button => button.disabled = button.id === "publish" && conflicts.some(item => item.severity === "error"));
     }
   }
-  function renderPlans(){$("plans").innerHTML=plans.length?plans.sort((a,b)=>b.startDate.localeCompare(a.startDate)).map(p=>`<div class="plan-card"><span class="badge ${p.status}">${p.status==="published"?"منشور":"مسودة"}</span><h3>${esc(p.title)}</h3><p>${p.startDate} — ${p.endDate}</p><div class="mini-actions"><button data-edit="${p.id}">تعديل</button><button data-publish="${p.id}">${p.status==="published"?"إرجاع لمسودة":"نشر"}</button><button data-delete="${p.id}">حذف</button></div></div>`).join(""):"<div class='empty'>لا توجد خطط محفوظة بعد</div>";
-    document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editPlan(b.dataset.edit));
-    document.querySelectorAll("[data-publish]").forEach(b=>b.onclick=async()=>{const p=plans.find(x=>x.id===b.dataset.publish),status=p.status==="published"?"draft":"published";await setDoc(doc(db,"academic_plans",p.id),{status,visibleToStudents:status==="published"},{merge:true});toast("تم تحديث حالة النشر")});
-    document.querySelectorAll("[data-delete]").forEach(b=>b.onclick=async()=>{if(confirm("حذف هذه الخطة؟"))await deleteDoc(doc(db,"academic_plans",b.dataset.delete))});
+
+  function filteredPlans() {
+    const year = $("plan-year").value;
+    return plans.filter(plan => year === "all" || plan.startDate?.startsWith(year + "-"));
   }
-  function editPlan(id){const p=plans.find(x=>x.id===id);if(!p)return;editingId=p.id;$("template").value=p.templateId;$("title").value=p.title;$("start").value=p.startDate;$("visibility").value=p.status;$("instructor").value=(p.blocks||[]).find(b=>b.instructor)?.instructor||"";$("room").value=(p.blocks||[]).find(b=>b.room)?.room||"";templateChanged();if(p.templateId==="ABA"){$("semester-count").value=p.semesterCount||p.semesterNames?.length||1;renderSemesterNames(p.semesterNames||[])}$("generate").textContent="تحديث الخطة ومعاينتها";window.scrollTo({top:0,behavior:"smooth"});toast("تم تحميل الخطة للتعديل")}
-  $("clear-plans").onclick=async()=>{if(!plans.length)return toast("لا توجد خطط لحذفها");if(!confirm(`سيتم حذف ${plans.length} خطة نهائيًا. هل أنت متأكدة؟`))return;await Promise.all(plans.map(p=>deleteDoc(doc(db,"academic_plans",p.id))));toast("تم حذف جميع الخطط")};
-  function updateStats(){$("stat-plans").textContent=plans.length;$("stat-published").textContent=plans.filter(p=>p.status==="published").length;$("stat-conflicts").textContent=plans.reduce((n,p)=>n+detectConflicts(p,plans).length,0);$("stat-holidays").textContent=SAUDI_EVENTS.length}
-  $("holidays").innerHTML=SAUDI_EVENTS.map(e=>`<div class="holiday"><strong><span class="status-dot ${e.status}"></span>${esc(e.name)}</strong><small>${e.start}${e.end!==e.start?` — ${e.end}`:""}<br>${e.status==="confirmed"?"مؤكد":"متوقع — بانتظار الإعلان الرسمي"}</small></div>`).join("");
+
+  function renderPlans() {
+    const filtered = filteredPlans().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+    $("plans").innerHTML = filtered.map(plan => {
+      const published = plan.visibleToStudents === true;
+      return `<div class="plan-card"><span class="badge ${published ? "published" : "draft"}">${published ? "منشور" : "مسودة"}</span>
+        <h3>${esc(plan.title)}</h3><p dir="ltr">${esc(plan.startDate)} — ${esc(plan.endDate)}</p>
+        <div class="mini-actions"><button data-edit="${esc(plan.id)}">تعديل</button>
+        <button data-publish="${esc(plan.id)}">${published ? "إرجاع لمسودة" : "نشر"}</button>
+        <button data-delete="${esc(plan.id)}">حذف</button></div></div>`;
+    }).join("") || '<div class="empty">لا توجد خطط لهذه السنة.</div>';
+    $("plans").querySelectorAll("[data-edit]").forEach(button => button.onclick = () => editPlan(button.dataset.edit));
+    $("plans").querySelectorAll("[data-publish]").forEach(button => button.onclick = async () => {
+      if (busy) return;
+      const plan = plans.find(item => item.id === button.dataset.publish);
+      if (!plan) return;
+      busy = true;
+      button.disabled = true;
+      try {
+        await writePlan(plan, plan.visibleToStudents ? "draft" : "published", plan.updatedAt, true);
+        toast("تم تحديث حالة النشر");
+      } catch (error) { toast(error.message); }
+      finally { busy = false; button.disabled = false; }
+    });
+    $("plans").querySelectorAll("[data-delete]").forEach(button => button.onclick = async () => {
+      if (busy || !confirm("حذف هذه الخطة؟")) return;
+      try {
+        await deleteDoc(doc(db, "academic_plans", button.dataset.delete));
+        if (editingId === button.dataset.delete) resetForm();
+        toast("تم حذف الخطة");
+      } catch (error) { toast(error.message); }
+    });
+  }
+
+  function editPlan(id) {
+    if (busy) return;
+    const plan = plans.find(item => item.id === id);
+    if (!plan) return;
+    resetForm();
+    editingId = plan.id;
+    editVersion = plan.updatedAt;
+    $("template").value = plan.templateId;
+    $("title").value = plan.title;
+    $("start").value = plan.requestedStartDate ?? plan.startDate;
+    $("end").value = plan.endDate;
+    $("instructor").value = plan.blocks?.find(block => block.instructor)?.instructor ?? "";
+    $("room").value = plan.blocks?.find(block => block.room)?.room ?? "";
+    templateChanged();
+    if (plan.templateId === "ABA") {
+      $("semester-count").value = plan.semesterCount || plan.semesterNames?.length || 1;
+      renderSemesterNames(plan.semesterNames || []);
+    }
+    $("generate").textContent = "معاينة التعديلات";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const holidays2027 = SAUDI_EVENTS.filter(event => event.start.startsWith("2027-"));
+  function updateStats() {
+    const filtered = filteredPlans();
+    $("stat-plans").textContent = filtered.length;
+    $("stat-published").textContent = filtered.filter(plan => plan.visibleToStudents).length;
+    $("stat-conflicts").textContent = filtered.reduce((count, plan) =>
+      count + detectConflicts(plan, plans.filter(item => item.visibleToStudents)).length, 0);
+    $("stat-holidays").textContent = holidays2027.length;
+  }
+  $("holidays").innerHTML = holidays2027.map(event => `<div class="holiday"><strong><span class="status-dot ${event.status}"></span>${esc(event.name)}</strong><small>${event.start}${event.end !== event.start ? " — " + event.end : ""}<br>${event.status === "confirmed" ? "مؤكد" : "متوقع — بانتظار الإعلان الرسمي"}</small></div>`).join("");
 </script>
 </body></html>

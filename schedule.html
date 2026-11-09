@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <script type="module">
+    import { hasAdminAccess, escapeHtml, phaseScheduleKey } from "./js/ui.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -49,18 +50,29 @@
     let activeProgram = null;
 
     // ── Auth ──
-    onAuthStateChanged(auth, user => {
-      isAdmin = !!user;
+    onAuthStateChanged(auth, async user => {
+      const admin = await hasAdminAccess(user);
+      if (auth.currentUser !== user) return;
+      isAdmin = admin;
       document.querySelectorAll(".admin-only").forEach(el =>
         el.style.display = isAdmin ? "" : "none");
       document.getElementById("login-fab").style.display = isAdmin ? "none" : "flex";
+      if (!isAdmin) window.closeScheduleEditor();
+      if (activeProgram) renderScheduleView();
     });
 
     window.doLogin = async () => {
       const e = document.getElementById("fab-email").value.trim();
       const p = document.getElementById("fab-pass").value;
-      try { await signInWithEmailAndPassword(auth, e, p); closeLoginPopup(); }
-      catch { document.getElementById("fab-err").textContent = "بيانات خاطئة"; }
+      const error = document.getElementById("fab-err");
+      error.textContent = "";
+      try {
+        const { user } = await signInWithEmailAndPassword(auth, e, p);
+        if (await hasAdminAccess(user)) closeLoginPopup();
+        else error.textContent = "هذا الحساب لا يملك صلاحية الإدارة";
+      } catch {
+        error.textContent = "بيانات خاطئة";
+      }
     };
     window.doLogout = () => signOut(auth);
     window.toggleLoginPopup = () => {
@@ -113,7 +125,12 @@
     // ── Tabs البرامج ──
     function renderProgramTabs() {
       const visible = ALL_PROGRAMS.filter(p => allCalData[p.id]?.visible);
-      if (!visible.length) return;
+      if (!visible.length) {
+        activeProgram = null;
+        document.getElementById("prog-tabs").textContent = "";
+        renderScheduleView();
+        return;
+      }
       if (!activeProgram || !visible.find(p=>p.id===activeProgram))
         activeProgram = visible[0].id;
 
@@ -147,16 +164,16 @@
 
       let html = `<div class="phases-tabs">`;
       phases.forEach((ph,i) => {
-        const key = `${activeProgram}_${i}`;
+        const key = phaseScheduleKey(activeProgram, ph, i);
         const hasSched = !!schedules[key]?.days?.length;
         html += `<button class="phase-tab ${i===0?"active":""}" data-idx="${i}"
-          onclick="selectPhaseTab(this,${i})">${ph.label||`فصل ${i+1}`}
+          onclick="selectPhaseTab(this,${i})">${escapeHtml(ph.label||`فصل ${i+1}`)}
           ${hasSched?'<span class="has-sched">✓</span>':''}</button>`;
       });
       html += `</div>`;
 
       phases.forEach((ph,i) => {
-        const key  = `${activeProgram}_${i}`;
+        const key = phaseScheduleKey(activeProgram, ph, i);
         const sched = schedules[key] || {};
         html += `<div class="phase-panel ${i===0?"active":""}" id="phase-panel-${i}">
           ${buildScheduleCard(ph, sched, i)}
@@ -206,8 +223,8 @@
             <div class="sched-title-block">
               <div class="sched-main-title">جدول المحاضرات الأسبوعية</div>
               <div class="sched-badges">
-                <span class="sched-badge-code">${sched.code||phase.label||""}</span>
-                <span class="sched-badge-phase">${phase.label||""}</span>
+                <span class="sched-badge-code">${escapeHtml(sched.code||phase.label||"")}</span>
+                <span class="sched-badge-phase">${escapeHtml(phase.label||"")}</span>
               </div>
             </div>
           </div>
@@ -217,15 +234,15 @@
       days.forEach(day => {
         cardHtml += `
             <div class="sched-row">
-              <div class="sched-day-name">${day.dayName}</div>
+              <div class="sched-day-name">${escapeHtml(day.dayName)}</div>
               <div class="sched-subject-block">
-                <div class="sched-subject-name">${day.subject}</div>
-                <div class="sched-instructor">أ. ${day.instructor}</div>
+                <div class="sched-subject-name">${escapeHtml(day.subject)}</div>
+                <div class="sched-instructor">أ. ${escapeHtml(day.instructor)}</div>
               </div>
               <div class="sched-time-block">
-                <div class="sched-time">${day.timeFrom}</div>
+                <div class="sched-time">${escapeHtml(day.timeFrom)}</div>
                 <div class="sched-time-sep">إلى</div>
-                <div class="sched-time">${day.timeTo}</div>
+                <div class="sched-time">${escapeHtml(day.timeTo)}</div>
               </div>
             </div>`;
       });
@@ -251,12 +268,17 @@
     // SCHEDULE EDITOR
     // ══════════════════════════════════════
     let editingPhaseIdx = null;
+    let editingProgram;
+    let editingScheduleKey;
     let editingDays     = [];
 
     window.openScheduleEditor = idx => {
+      const selectedPhase = allCalData[activeProgram]?.phases?.[idx];
+      if (!isAdmin || !selectedPhase) return;
       editingPhaseIdx = idx;
-      const key   = `${activeProgram}_${idx}`;
-      const sched = schedules[key] || {};
+      editingProgram = activeProgram;
+      editingScheduleKey = phaseScheduleKey(activeProgram, selectedPhase, idx);
+      const sched = schedules[editingScheduleKey] || {};
       editingDays = JSON.parse(JSON.stringify(sched.days || []));
 
       const phases = allCalData[activeProgram]?.phases || [];
@@ -296,7 +318,7 @@
               <label>المقرر</label>
               <select class="sdf-input" onchange="updateDay(${i},'subject',this.value)">
                 <option value="">اختاري...</option>
-                ${subjects.map(s=>`<option value="${s.name}" ${day.subject===s.name?"selected":""}>${s.name}</option>`).join("")}
+                ${subjects.map(s=>`<option value="${escapeHtml(s.name)}" ${day.subject===s.name?"selected":""}>${escapeHtml(s.name)}</option>`).join("")}
                 <option value="__custom__">إضافة مقرر جديد...</option>
               </select>
             </div>
@@ -304,18 +326,18 @@
               <label>المحاضر</label>
               <select class="sdf-input" onchange="updateDay(${i},'instructor',this.value)">
                 <option value="">اختاري...</option>
-                ${instructors.map(s=>`<option value="${s.name}" ${day.instructor===s.name?"selected":""}>${s.name}</option>`).join("")}
+                ${instructors.map(s=>`<option value="${escapeHtml(s.name)}" ${day.instructor===s.name?"selected":""}>${escapeHtml(s.name)}</option>`).join("")}
                 <option value="__custom__">إضافة محاضر جديد...</option>
               </select>
             </div>
             <div class="sdf-group">
               <label>من</label>
-              <input class="sdf-input" type="time" value="${day.timeFrom||""}"
+              <input class="sdf-input" type="time" value="${escapeHtml(day.timeFrom||"")}"
                 oninput="updateDay(${i},'timeFrom',this.value)"/>
             </div>
             <div class="sdf-group">
               <label>إلى</label>
-              <input class="sdf-input" type="time" value="${day.timeTo||""}"
+              <input class="sdf-input" type="time" value="${escapeHtml(day.timeTo||"")}"
                 oninput="updateDay(${i},'timeTo',this.value)"/>
             </div>
           </div>
@@ -350,13 +372,14 @@
     };
 
     window.saveSchedule = async () => {
+      if (!isAdmin || !editingScheduleKey) return;
       const btn  = document.getElementById("save-sched-btn");
       const code = document.getElementById("sched-code-input").value.trim();
       btn.disabled=true; btn.textContent="جاري الحفظ...";
       try {
-        const key = `${activeProgram}_${editingPhaseIdx}`;
+        const key = editingScheduleKey;
         await setDoc(doc(db,"schedules",key), {
-          progId: activeProgram,
+          progId: editingProgram,
           phaseIdx: editingPhaseIdx,
           code,
           days: editingDays,
@@ -389,15 +412,21 @@
 
       subList.innerHTML = subjects.map(s => `
         <div class="list-item">
-          <span>${s.name}</span>
-          <button onclick="deleteListItem('subjects','${s.id}')" class="list-del">✕</button>
+          <span>${escapeHtml(s.name)}</span>
+          <button data-delete-subject="${escapeHtml(s.id)}" class="list-del">✕</button>
         </div>`).join("") || '<p class="list-empty">لا توجد مقررات</p>';
 
       instList.innerHTML = instructors.map(s => `
         <div class="list-item">
-          <span>${s.name}</span>
-          <button onclick="deleteListItem('instructors','${s.id}')" class="list-del">✕</button>
+          <span>${escapeHtml(s.name)}</span>
+          <button data-delete-instructor="${escapeHtml(s.id)}" class="list-del">✕</button>
         </div>`).join("") || '<p class="list-empty">لا يوجد محاضرون</p>';
+      subList.querySelectorAll("[data-delete-subject]").forEach(button => {
+        button.onclick = () => window.deleteListItem("subjects", button.dataset.deleteSubject);
+      });
+      instList.querySelectorAll("[data-delete-instructor]").forEach(button => {
+        button.onclick = () => window.deleteListItem("instructors", button.dataset.deleteInstructor);
+      });
     }
 
     window.addListItem = async (type) => {
